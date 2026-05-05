@@ -1,0 +1,29 @@
+{
+  "name": "rollercoaster-weight-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed-weights": "node scripts/seedWeights.js",
+    "seed-monthly-weights": "node scripts/seedMonthlyWeights.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.104.0",
+    "chart.js": "^4.4.0",
+    "dayjs": "^1.11.9",
+    "dotenv": "^17.4.2",
+    "react": "^18.2.0",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.12.1",
+    "recharts": "^3.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^5.2.0",
+    "vite-bundle-analyzer": "^1.3.8"
+  }
+}
