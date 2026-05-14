@@ -1,12 +1,76 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { useData } from "../contexts/DataContext";
+import { saveWeights, uid } from "../utils/storage";
 import dayjs from "dayjs";
+
+function parseBool(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value !== "string") return false;
+  return /^(true|yes|y|1)$/i.test(value.trim());
+}
+
+function normalizeWeightRecord(record, fallbackPersonId) {
+  if (!record || typeof record !== "object") return null;
+
+  const kgValue =
+    record.kg ??
+    record.weight ??
+    record["weight (kg)"] ??
+    record.weight_kg ??
+    record["weight_kg"];
+  const parsedKg =
+    typeof kgValue === "string"
+      ? parseFloat(kgValue.replace(",", "."))
+      : kgValue;
+  const date = record.date || record.Date;
+  const personId = record.personId || record.person_id || fallbackPersonId;
+  if (!date || Number.isNaN(parsedKg) || !personId) return null;
+
+  return {
+    id: record.id || record.uid || uid(),
+    date: String(date).trim(),
+    kg: Number(parsedKg),
+    personId,
+    activities: {
+      gym: parseBool(record.activities?.gym ?? record.gym),
+      bike: parseBool(record.activities?.bike ?? record.bike),
+      boxing: parseBool(
+        record.activities?.boxing ??
+          record.activities?.gloves ??
+          record.boxing ??
+          record.gloves,
+      ),
+      run: parseBool(
+        record.activities?.run ??
+          record.activities?.running ??
+          record.run ??
+          record.running,
+      ),
+    },
+  };
+}
+
+function normalizeImportedRecords(rawRecords, fallbackPersonId) {
+  return rawRecords
+    .map((item) => normalizeWeightRecord(item, fallbackPersonId))
+    .filter(Boolean);
+}
 
 function parseWeightData(fileText) {
   try {
     const parsed = JSON.parse(fileText);
     if (Array.isArray(parsed)) {
       return parsed;
+    }
+    if (parsed?.weights && Array.isArray(parsed.weights)) {
+      return parsed.weights;
+    }
+    if (parsed?.data && Array.isArray(parsed.data)) {
+      return parsed.data;
+    }
+    if (parsed && typeof parsed === "object") {
+      return [parsed];
     }
   } catch {
     const rows = fileText
@@ -24,6 +88,16 @@ function parseWeightData(fileText) {
     });
   }
   return [];
+}
+
+function mergeWeights(existing, imported) {
+  const merged = new Map(existing.map((w) => [w.id, w]));
+  imported.forEach((item) => {
+    if (item?.id) {
+      merged.set(item.id, item);
+    }
+  });
+  return Array.from(merged.values());
 }
 
 function generateLocalInsights(summary, userWeights) {
@@ -170,8 +244,9 @@ function generateMonthlySummaries(userWeights) {
 }
 
 export default function InsightsPage({ currentUser }) {
-  const { weights, people, loading } = useData();
+  const { weights, people, loading, updateWeights } = useData();
   const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
   const [connectedRecords, setConnectedRecords] = useState([]);
   const [summaryView, setSummaryView] = useState("weekly");
 
@@ -231,24 +306,38 @@ export default function InsightsPage({ currentUser }) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const text = reader.result;
-        const imported = parseWeightData(text);
+        const importedRaw = parseWeightData(text);
+        const imported = normalizeImportedRecords(importedRaw, currentUser?.id);
         if (!imported.length) {
           setImportError("No usable records found in the file.");
+          setImportSuccess("");
           setConnectedRecords([]);
           return;
         }
+
+        const nextWeights = mergeWeights(weights, imported);
+        await saveWeights(nextWeights);
+        updateWeights(nextWeights);
+
         setImportError("");
+        setImportSuccess(
+          `Imported ${imported.length} record${imported.length === 1 ? "" : "s"} and saved to the database.`,
+        );
         setConnectedRecords(imported);
       } catch (err) {
-        setImportError("Error parsing file. Use JSON or CSV.");
+        console.error("Import failed", err);
+        setImportError(
+          "Error parsing or saving file. Use the app export JSON format or a valid CSV.",
+        );
+        setImportSuccess("");
         setConnectedRecords([]);
       }
     };
     reader.readAsText(file);
-  }, []);
+  }, [currentUser, updateWeights, weights]);
 
   const exportAsJSON = useCallback(() => {
     if (!userWeights.length) {
@@ -531,12 +620,17 @@ export default function InsightsPage({ currentUser }) {
       <section className="insights-panel" style={{ marginTop: "24px" }}>
         <h3>Import external data</h3>
         <p style={{ color: "var(--text-secondary)", marginBottom: "12px" }}>
-          Import weight history from other apps (JSON or CSV).
+          Import weight history from exported JSON or compatible CSV. Imported records are saved to the database.
         </p>
         <input type="file" accept=".json,.csv" onChange={onFileImport} />
         {importError && (
           <div style={{ color: "var(--danger)", marginTop: "12px" }}>
             {importError}
+          </div>
+        )}
+        {importSuccess && (
+          <div style={{ color: "var(--success)", marginTop: "12px" }}>
+            {importSuccess}
           </div>
         )}
         {connectedRecords.length > 0 && (

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useData } from "../contexts/DataContext";
 import { saveWeights } from "../utils/storage";
 import dayjs from "dayjs";
@@ -36,6 +36,22 @@ export default function CalendarPage({ currentUser }) {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: firstDay }, (_, i) => i);
 
+  useEffect(() => {
+    const entry = weightsByDate.get(selectedDate);
+    if (entry) {
+      setKg(entry.kg.toString());
+      setActivities({
+        gym: entry.activities?.gym || false,
+        bike: entry.activities?.bike || false,
+        boxing: entry.activities?.boxing || false,
+        run: entry.activities?.run || false,
+      });
+    } else {
+      setKg("");
+      setActivities({ gym: false, bike: false, boxing: false, run: false });
+    }
+  }, [selectedDate, weightsByDate]);
+
   const onAddWeight = useCallback(async () => {
     if (!currentUser) {
       setMessage("Select a user first");
@@ -46,26 +62,39 @@ export default function CalendarPage({ currentUser }) {
       return;
     }
 
-    try {
-      const newEntry = {
-        id: `${currentUser.id}-${selectedDate}-${Date.now()}`,
-        personId: currentUser.id,
-        date: selectedDate,
-        kg: parseFloat(kg),
-        activities,
-      };
+    const existingEntry = weightsByDate.get(selectedDate);
+    const entryId =
+      existingEntry?.id || `${currentUser.id}-${selectedDate}-${Date.now()}`;
+    const nextEntry = {
+      id: entryId,
+      personId: currentUser.id,
+      date: selectedDate,
+      kg: parseFloat(kg),
+      activities,
+    };
 
-      await saveWeights([...userWeights, newEntry]);
+    try {
+      const nextWeights = [
+        ...userWeights.filter((w) => w.date.slice(0, 10) !== selectedDate),
+        nextEntry,
+      ];
+      await saveWeights(nextWeights);
       await refreshData();
-      setKg("");
-      setActivities({ gym: false, bike: false, boxing: false, run: false });
-      setMessage("✅ Weight added!");
+      setMessage(existingEntry ? "✅ Weight updated!" : "✅ Weight added!");
       setTimeout(() => setMessage(""), 2000);
     } catch (err) {
       setMessage("❌ Failed to save");
       console.error(err);
     }
-  }, [currentUser, selectedDate, kg, activities, userWeights, refreshData]);
+  }, [
+    currentUser,
+    selectedDate,
+    kg,
+    activities,
+    userWeights,
+    weightsByDate,
+    refreshData,
+  ]);
 
   const onPrevMonth = () => {
     setSelectedDate(currentMonth.subtract(1, "month").format("YYYY-MM-DD"));
@@ -282,7 +311,7 @@ export default function CalendarPage({ currentUser }) {
           onClick={onAddWeight}
           style={{ width: "100%" }}
         >
-          Add weight
+          {weightsByDate.has(selectedDate) ? "Update weight" : "Add weight"}
         </button>
 
         {message && (

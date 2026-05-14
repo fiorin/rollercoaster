@@ -132,7 +132,7 @@ export default function GraphPage({ currentUser }) {
       bike: activityValues.bike?.[index] ?? null,
       boxing: activityValues.boxing?.[index] ?? null,
       run: activityValues.run?.[index] ?? null,
-    }));
+    })).filter(item => item.weight !== null);
   }, [series, activityValues]);
 
   if (loading)
@@ -143,7 +143,7 @@ export default function GraphPage({ currentUser }) {
     );
 
   return (
-    <div className="graph-container">
+    <div className="graph-container" style={{ paddingBottom: "80px" }}>
       <div className="graph-header">
         <h2>Weight Graph</h2>
       </div>

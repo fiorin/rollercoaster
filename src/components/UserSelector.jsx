@@ -44,10 +44,11 @@ export default function UserSelector({ onUserChange }) {
             ? avatarUrl
               ? "transparent"
               : "var(--accent)"
-            : "var(--bg-light)",
+            : "#6b7280",
           backgroundImage: avatarUrl ? `url(${avatarUrl})` : "none",
           backgroundSize: "cover",
           backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
           cursor: "pointer",
           border: "2px solid var(--border-color)",
           padding: 0,
@@ -59,9 +60,11 @@ export default function UserSelector({ onUserChange }) {
           justifyContent: "center",
         }}
       >
-        {!avatarUrl && selectedUser
+        {!selectedUser
+          ? null
+          : !avatarUrl
           ? selectedUser.name.slice(0, 2).toUpperCase()
-          : !selectedUser && "👤"}
+          : null}
       </button>
 
       {showModal && (

@@ -130,11 +130,19 @@ export default function WeightsPage({ currentUser }) {
         {currentUser ? (
           <>
             <div className="weights-filters">
-              <label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 Year
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    background: 'var(--bg-white)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
                 >
                   {yearOptions.map((year) => (
                     <option key={year.value} value={year.value}>
@@ -143,11 +151,19 @@ export default function WeightsPage({ currentUser }) {
                   ))}
                 </select>
               </label>
-              <label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 Month
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    background: 'var(--bg-white)',
+                    color: 'var(--text-primary)',
+                    fontSize: '14px',
+                  }}
                 >
                   {monthOptions.map((month) => (
                     <option key={month.value} value={month.value}>

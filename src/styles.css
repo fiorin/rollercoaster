@@ -212,14 +212,12 @@ main {
   color: var(--text-secondary);
   font-size: 12px;
   transition: all 0.2s;
-  border-top: 3px solid transparent;
   tap-highlight-color: transparent;
   min-height: 48px;
 }
 
 .nav-item.active {
   color: var(--accent);
-  border-top-color: var(--accent);
   background: var(--accent-light);
 }
 
