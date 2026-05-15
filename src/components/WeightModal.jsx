@@ -67,9 +67,10 @@ export default function WeightModal({
         <h3>{initial ? "Edit Weight Entry" : "Add Weight Entry"}</h3>
 
         {!currentUser && (
-          <label>
-            Person
+          <div className="form-field">
+            <span className="field-label">Person</span>
             <select
+              className="form-control"
               value={personId}
               onChange={(e) => setPersonId(e.target.value)}
               required
@@ -81,22 +82,24 @@ export default function WeightModal({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         )}
 
-        <label>
-          Date
+        <div className="form-field">
+          <span className="field-label">Date</span>
           <input
+            className="form-control"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             required
           />
-        </label>
+        </div>
 
-        <label>
-          Weight (kg)
+        <div className="form-field">
+          <span className="field-label">Weight (kg)</span>
           <input
+            className="form-control"
             type="number"
             step="0.1"
             min="0"
@@ -106,18 +109,10 @@ export default function WeightModal({
             placeholder="Enter weight in kg"
             required
           />
-        </label>
+        </div>
 
-        <div style={{ marginTop: "16px" }}>
-          <div
-            style={{
-              fontSize: "14px",
-              color: "var(--text-secondary)",
-              marginBottom: "8px",
-            }}
-          >
-            Activities
-          </div>
+        <div className="form-field">
+          <span className="field-label">Activities</span>
           <ActivityButtons activities={activities} onChange={setActivities} />
         </div>
 

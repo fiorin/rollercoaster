@@ -5,13 +5,7 @@ const PeopleList = memo(function PeopleList({ people, onDelete }) {
 
   if (peopleArray.length === 0) {
     return (
-      <div
-        style={{
-          padding: "32px 16px",
-          textAlign: "center",
-          color: "var(--text-secondary)",
-        }}
-      >
+      <div className="empty-state-card">
         <p>No users yet. Create one above to get started!</p>
       </div>
     );
@@ -19,30 +13,24 @@ const PeopleList = memo(function PeopleList({ people, onDelete }) {
 
   return (
     <div className="people-list">
-      {peopleArray.map((p) => (
-        <div key={p.id} className="person-row">
-          <div className="avatar">
-            <img
-              src={`/avatars/avatar-${p.avatar_id}.png`}
-              alt={p.name}
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                objectFit: "cover",
-              }}
-            />
+      {peopleArray.map((p) => {
+        const avatarId = p.avatar_id || p.avatar || 1;
+        return (
+          <div key={p.id} className="person-row">
+            <div className="avatar">
+              <img src={`/avatars/avatar-${avatarId}.png`} alt={p.name} />
+            </div>
+            <div className="person-info">
+              <div className="person-name">{p.name}</div>
+            </div>
+            <div className="person-actions">
+              <button onClick={() => onDelete(p.id)} title="Delete">
+                🗑️
+              </button>
+            </div>
           </div>
-          <div className="person-info">
-            <div className="person-name">{p.name}</div>
-          </div>
-          <div className="person-actions">
-            <button onClick={() => onDelete(p.id)} title="Delete">
-              🗑️
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 });

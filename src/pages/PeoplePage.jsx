@@ -41,9 +41,11 @@ export default function PeoplePage() {
     );
 
   return (
-    <div style={{ padding: "16px" }}>
-      <h2>Manage Users</h2>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+    <div className="page-body">
+      <div className="page-title">
+        <h2>Manage Users</h2>
+      </div>
+      <p className="page-description">
         Add and manage the people you want to track
       </p>
       <PeopleForm onAdd={add} />

@@ -75,7 +75,7 @@ export async function saveWeights(list) {
   return data;
 }
 
-// UUID helper — use crypto.randomUUID when available
+// UUID helper — generate a valid UUID
 export function uid() {
   if (
     typeof crypto !== "undefined" &&
@@ -83,5 +83,10 @@ export function uid() {
   ) {
     return crypto.randomUUID();
   }
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  // Fallback UUID generator
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }

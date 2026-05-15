@@ -101,9 +101,11 @@ export default function GoalsPage({ currentUser }) {
   );
 
   return (
-    <div style={{ padding: "16px" }}>
-      <h2>Goals</h2>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+    <div className="page-body">
+      <div className="page-title">
+        <h2>Goals</h2>
+      </div>
+      <p className="page-description">
         Create weight targets and track progress with badges when you hit them.
       </p>
 
@@ -113,36 +115,41 @@ export default function GoalsPage({ currentUser }) {
         </div>
       ) : (
         <>
-          <form className="goals-form" onSubmit={addGoal}>
-            <label>
-              Goal name
+          <form className="goals-form card" onSubmit={addGoal}>
+            <div className="form-field">
+              <span className="field-label">Goal name</span>
               <input
+                className="form-control"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Lose 3 kg by summer"
               />
-            </label>
-            <label>
-              Target weight (kg)
+            </div>
+            <div className="form-field">
+              <span className="field-label">Target weight (kg)</span>
               <input
+                className="form-control"
                 type="number"
                 min="0"
                 step="0.1"
                 value={targetKg}
                 onChange={(e) => setTargetKg(e.target.value)}
               />
-            </label>
-            <label>
-              Target date
+            </div>
+            <div className="form-field">
+              <span className="field-label">Target date</span>
               <input
+                className="form-control"
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
               />
-            </label>
-            <button className="primary" type="submit">
-              Save goal
-            </button>
+            </div>
+            <div className="form-actions">
+              <button className="primary" type="submit">
+                Save goal
+              </button>
+            </div>
           </form>
 
           <div className="goal-summary-card">

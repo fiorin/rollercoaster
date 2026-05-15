@@ -33,36 +33,13 @@ export default function UserSelector({ onUserChange }) {
   return (
     <>
       <button
-        className="user-selector"
+        className={`user-selector ${selectedUser ? "selected" : ""} ${avatarUrl ? "avatar" : ""}`}
         onClick={() => setShowModal(true)}
         title={selectedUser?.name || "Select user"}
-        style={{
-          width: "40px",
-          height: "40px",
-          borderRadius: "50%",
-          backgroundColor: selectedUser
-            ? avatarUrl
-              ? "transparent"
-              : "var(--accent)"
-            : "#6b7280",
-          backgroundImage: avatarUrl ? `url(${avatarUrl})` : "none",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          cursor: "pointer",
-          border: "2px solid var(--border-color)",
-          padding: 0,
-          color: "white",
-          fontSize: "14px",
-          fontWeight: "bold",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        type="button"
+        style={avatarUrl ? { backgroundImage: `url(${avatarUrl})` } : undefined}
       >
-        {!selectedUser
-          ? null
-          : !avatarUrl
+        {selectedUser && !avatarUrl
           ? selectedUser.name.slice(0, 2).toUpperCase()
           : null}
       </button>
@@ -72,13 +49,7 @@ export default function UserSelector({ onUserChange }) {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Select User</h3>
             {people.length === 0 ? (
-              <p
-                style={{
-                  color: "var(--text-secondary)",
-                  textAlign: "center",
-                  margin: "24px 0",
-                }}
-              >
+              <p className="empty-state-card">
                 No users yet. Go to "Manage Users" to create one.
               </p>
             ) : (
@@ -90,34 +61,17 @@ export default function UserSelector({ onUserChange }) {
                       key={p.id}
                       className="person-avatar-button"
                       onClick={() => selectUser(p)}
+                      type="button"
                     >
                       <div className="person-avatar">
                         {pAvatarUrl ? (
                           <img
+                            className="person-avatar-img"
                             src={pAvatarUrl}
                             alt={p.name}
-                            style={{
-                              width: "60px",
-                              height: "60px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                            }}
                           />
                         ) : (
-                          <div
-                            style={{
-                              width: "60px",
-                              height: "60px",
-                              borderRadius: "50%",
-                              backgroundColor: "var(--accent)",
-                              color: "white",
-                              fontSize: "20px",
-                              fontWeight: "bold",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
+                          <div className="person-avatar-fallback">
                             {p.name.slice(0, 2).toUpperCase()}
                           </div>
                         )}

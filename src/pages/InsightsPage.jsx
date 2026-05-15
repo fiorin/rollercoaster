@@ -302,42 +302,48 @@ export default function InsightsPage({ currentUser }) {
     [userWeights],
   );
 
-  const onFileImport = useCallback((event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const text = reader.result;
-        const importedRaw = parseWeightData(text);
-        const imported = normalizeImportedRecords(importedRaw, currentUser?.id);
-        if (!imported.length) {
-          setImportError("No usable records found in the file.");
+  const onFileImport = useCallback(
+    (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const text = reader.result;
+          const importedRaw = parseWeightData(text);
+          const imported = normalizeImportedRecords(
+            importedRaw,
+            currentUser?.id,
+          );
+          if (!imported.length) {
+            setImportError("No usable records found in the file.");
+            setImportSuccess("");
+            setConnectedRecords([]);
+            return;
+          }
+
+          const nextWeights = mergeWeights(weights, imported);
+          await saveWeights(nextWeights);
+          updateWeights(nextWeights);
+
+          setImportError("");
+          setImportSuccess(
+            `Imported ${imported.length} record${imported.length === 1 ? "" : "s"} and saved to the database.`,
+          );
+          setConnectedRecords(imported);
+        } catch (err) {
+          console.error("Import failed", err);
+          setImportError(
+            "Error parsing or saving file. Use the app export JSON format or a valid CSV.",
+          );
           setImportSuccess("");
           setConnectedRecords([]);
-          return;
         }
-
-        const nextWeights = mergeWeights(weights, imported);
-        await saveWeights(nextWeights);
-        updateWeights(nextWeights);
-
-        setImportError("");
-        setImportSuccess(
-          `Imported ${imported.length} record${imported.length === 1 ? "" : "s"} and saved to the database.`,
-        );
-        setConnectedRecords(imported);
-      } catch (err) {
-        console.error("Import failed", err);
-        setImportError(
-          "Error parsing or saving file. Use the app export JSON format or a valid CSV.",
-        );
-        setImportSuccess("");
-        setConnectedRecords([]);
-      }
-    };
-    reader.readAsText(file);
-  }, [currentUser, updateWeights, weights]);
+      };
+      reader.readAsText(file);
+    },
+    [currentUser, updateWeights, weights],
+  );
 
   const exportAsJSON = useCallback(() => {
     if (!userWeights.length) {
@@ -416,9 +422,11 @@ export default function InsightsPage({ currentUser }) {
     );
 
   return (
-    <div style={{ padding: "16px" }}>
-      <h2>Insights</h2>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+    <div className="page-body">
+      <div className="page-title">
+        <h2>Insights</h2>
+      </div>
+      <p className="page-description">
         View your progress and export data for deeper analysis.
       </p>
 
@@ -444,21 +452,11 @@ export default function InsightsPage({ currentUser }) {
       </section>
 
       {insights.length > 0 && (
-        <section className="insights-panel" style={{ marginTop: "24px" }}>
+        <section className="insights-panel section-gap">
           <h3>Local insights</h3>
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "12px" }}
-          >
+          <div className="insights-list">
             {insights.map((insight, idx) => (
-              <div
-                key={idx}
-                style={{
-                  padding: "12px",
-                  backgroundColor: "var(--bg-secondary)",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                }}
-              >
+              <div key={idx} className="insight-card">
                 {insight}
               </div>
             ))}
@@ -467,38 +465,20 @@ export default function InsightsPage({ currentUser }) {
       )}
 
       {(weeklySummaries.length > 0 || monthlySummaries.length > 0) && (
-        <section className="insights-panel" style={{ marginTop: "24px" }}>
+        <section className="insights-panel section-gap">
           <h3>Weekly & Monthly reports</h3>
-          <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+          <div className="export-actions">
             <button
+              className={`primary ${summaryView === "weekly" ? "active-pill" : ""}`}
               onClick={() => setSummaryView("weekly")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor:
-                  summaryView === "weekly"
-                    ? "var(--primary)"
-                    : "var(--bg-secondary)",
-                color: summaryView === "weekly" ? "white" : "var(--text)",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
+              type="button"
             >
               📅 Weekly
             </button>
             <button
+              className={`primary ${summaryView === "monthly" ? "active-pill" : ""}`}
               onClick={() => setSummaryView("monthly")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor:
-                  summaryView === "monthly"
-                    ? "var(--primary)"
-                    : "var(--bg-secondary)",
-                color: summaryView === "monthly" ? "white" : "var(--text)",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-              }}
+              type="button"
             >
               📆 Monthly
             </button>
@@ -582,26 +562,14 @@ export default function InsightsPage({ currentUser }) {
         <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
           Export your data for external analysis or backup.
         </p>
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-          <button
-            className="primary"
-            onClick={exportAsJSON}
-            style={{ flex: "1", minWidth: "120px" }}
-          >
+        <div className="export-actions">
+          <button className="primary" onClick={exportAsJSON} type="button">
             📄 JSON
           </button>
-          <button
-            className="primary"
-            onClick={exportAsCSV}
-            style={{ flex: "1", minWidth: "120px" }}
-          >
+          <button className="primary" onClick={exportAsCSV} type="button">
             📊 CSV
           </button>
-          <button
-            className="primary"
-            onClick={exportAsPrompt}
-            style={{ flex: "1", minWidth: "120px" }}
-          >
+          <button className="primary" onClick={exportAsPrompt} type="button">
             💬 AI Prompt
           </button>
         </div>
@@ -617,24 +585,36 @@ export default function InsightsPage({ currentUser }) {
         </p>
       </section>
 
-      <section className="insights-panel" style={{ marginTop: "24px" }}>
+      <section className="insights-panel section-gap">
         <h3>Import external data</h3>
-        <p style={{ color: "var(--text-secondary)", marginBottom: "12px" }}>
-          Import weight history from exported JSON or compatible CSV. Imported records are saved to the database.
+        <p className="page-description" style={{ marginBottom: "12px" }}>
+          Import weight history from exported JSON or compatible CSV. Imported
+          records are saved to the database.
         </p>
-        <input type="file" accept=".json,.csv" onChange={onFileImport} />
+        <input
+          className="file-input"
+          type="file"
+          accept=".json,.csv"
+          onChange={onFileImport}
+        />
         {importError && (
-          <div style={{ color: "var(--danger)", marginTop: "12px" }}>
+          <div
+            className="goal-progress-text"
+            style={{ color: "var(--danger)", marginTop: "12px" }}
+          >
             {importError}
           </div>
         )}
         {importSuccess && (
-          <div style={{ color: "var(--success)", marginTop: "12px" }}>
+          <div
+            className="goal-progress-text"
+            style={{ color: "var(--success)", marginTop: "12px" }}
+          >
             {importSuccess}
           </div>
         )}
         {connectedRecords.length > 0 && (
-          <div style={{ marginTop: "12px" }}>
+          <div className="goal-progress-text" style={{ marginTop: "12px" }}>
             ✅ Connected records: {connectedRecords.length}
           </div>
         )}

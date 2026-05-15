@@ -10,6 +10,9 @@
   --border-color: #424242;
   --bg-light: #303030;
   --bg-white: #1e1e1e;
+  --bg-soft: #252525;
+  --bg-secondary: #2b2b2b;
+  --text: #f4f4f4;
 
   /* Activity colors */
   --gym-color: #fbc02d;
@@ -143,6 +146,7 @@ body {
 .menu-item {
   background: none;
   border: none;
+  border-radius: 0;
   padding: 16px;
   text-align: left;
   font-size: 16px;
@@ -203,6 +207,7 @@ main {
   flex: 1;
   background: none;
   border: none;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -452,7 +457,241 @@ button {
 }
 
 button:active {
-  background: #e8eaed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+input,
+select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-white);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+.page-body {
+  padding: 16px;
+  padding-bottom: 80px;
+}
+
+.page-title {
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.page-description {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.summary-card-subtext {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.activity-filter-heading {
+  margin-bottom: 8px;
+}
+
+.activities-section {
+  margin-top: 16px;
+}
+
+.insights-panel {
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.insights-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.insights-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.insight-card {
+  background: var(--bg-soft);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.insights-list {
+  display: grid;
+  gap: 12px;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.file-input {
+  width: 100%;
+  max-width: 420px;
+}
+
+.goal-summary-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
+.goal-card {
+  background: var(--bg-white);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.goal-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.goal-meta {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.goal-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.goal-badge-success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.goal-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--bg-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.goal-progress-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.goal-list {
+  display: grid;
+  gap: 12px;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.export-actions button {
+  flex: 1;
+  min-width: 120px;
+}
+
+.active-pill {
+  background: var(--accent);
+  color: white !important;
+}
+
+.empty-state-card {
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--bg-soft);
+  color: var(--text-secondary);
+}
+
+.person-row {
+  background: var(--bg-white);
 }
 
 /* Weight Page */
@@ -503,7 +742,7 @@ button:active {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
-  padding-bottom: 24px;
+  padding: 0 16px 24px;
 }
 
 .add-weight-fab {
@@ -535,7 +774,7 @@ button:active {
 /* Weight List */
 .weight-list {
   margin: 0;
-  padding: 0;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1049,15 +1288,51 @@ button:active {
 
 /* User Selector */
 .user-selector {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s;
   border: 2px solid var(--border-color);
-  background: var(--bg-white) !important;
+  background: var(--bg-white);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  background-size: cover;
+  background-position: center;
 }
 
-.user-selector:active {
-  box-shadow: 0 0 0 2px var(--accent);
+.user-selector.selected:not(.avatar) {
+  background: var(--accent);
+  color: white;
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(31, 120, 180, 0.16);
+}
+
+.user-selector.avatar {
+  background-color: transparent;
+}
+
+.person-avatar-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.person-avatar-fallback {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .people-list {
@@ -1114,7 +1389,7 @@ button:active {
   padding: 16px;
   gap: 12px;
   width: 100%;
-  padding-bottom: 24px;
+  padding-bottom: 80px;
 }
 
 .graph-header {
@@ -1153,6 +1428,20 @@ button:active {
 .date-range-inputs label {
   flex: 1;
   min-width: 140px;
+}
+
+.date-range-inputs label.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 170px;
+  min-width: 180px;
+}
+
+.date-range-inputs label.inline-field .field-label {
+  min-width: 60px;
+  white-space: nowrap;
+  color: var(--text-secondary);
 }
 
 .filters input,

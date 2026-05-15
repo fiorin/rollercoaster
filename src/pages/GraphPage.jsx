@@ -14,6 +14,7 @@ import {
   Scatter,
 } from "recharts";
 import dayjs from "dayjs";
+import ActivityButtons from "../components/ActivityButtons";
 
 const ActivityCharts = lazy(() => import("../components/ActivityCharts"));
 const MainWeightChart = lazy(() => import("../components/MainWeightChart"));
@@ -123,16 +124,18 @@ export default function GraphPage({ currentUser }) {
   );
 
   const chartData = useMemo(() => {
-    return series.labels.map((date, index) => ({
-      date,
-      weight: series.raw[index],
-      avg7: series.m7[index],
-      avg30: series.m30[index],
-      gym: activityValues.gym?.[index] ?? null,
-      bike: activityValues.bike?.[index] ?? null,
-      boxing: activityValues.boxing?.[index] ?? null,
-      run: activityValues.run?.[index] ?? null,
-    })).filter(item => item.weight !== null);
+    return series.labels
+      .map((date, index) => ({
+        date,
+        weight: series.raw[index],
+        avg7: series.m7[index],
+        avg30: series.m30[index],
+        gym: activityValues.gym?.[index] ?? null,
+        bike: activityValues.bike?.[index] ?? null,
+        boxing: activityValues.boxing?.[index] ?? null,
+        run: activityValues.run?.[index] ?? null,
+      }))
+      .filter((item) => item.weight !== null);
   }, [series, activityValues]);
 
   if (loading)
@@ -143,16 +146,17 @@ export default function GraphPage({ currentUser }) {
     );
 
   return (
-    <div className="graph-container" style={{ paddingBottom: "80px" }}>
+<div className="graph-container">
       <div className="graph-header">
         <h2>Weight Graph</h2>
       </div>
 
       <div className="filters">
         {!currentUser && (
-          <label>
-            Person
+          <div className="form-field">
+            <span className="field-label">Person</span>
             <select
+              className="form-control"
               value={personId}
               onChange={(e) => setPersonId(e.target.value)}
             >
@@ -162,20 +166,22 @@ export default function GraphPage({ currentUser }) {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         )}
         <div className="date-range-inputs">
-          <label>
-            From
+          <label className="inline-field">
+            <span className="field-label">From</span>
             <input
+              className="form-control"
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
           </label>
-          <label>
-            To
+          <label className="inline-field">
+            <span className="field-label">To</span>
             <input
+              className="form-control"
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
@@ -184,82 +190,14 @@ export default function GraphPage({ currentUser }) {
         </div>
       </div>
 
-      <div
-        style={{
-          margin: "12px 0",
-          display: "flex",
-          gap: "8px",
-          flexWrap: "wrap",
-        }}
-      >
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showActivities.gym}
-            onChange={(e) =>
-              setShowActivities({ ...showActivities, gym: e.target.checked })
-            }
-          />
-          <span>💪 Gym</span>
-        </label>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showActivities.bike}
-            onChange={(e) =>
-              setShowActivities({ ...showActivities, bike: e.target.checked })
-            }
-          />
-          <span>🚴 Bike</span>
-        </label>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showActivities.boxing}
-            onChange={(e) =>
-              setShowActivities({ ...showActivities, boxing: e.target.checked })
-            }
-          />
-          <span>🥊 Boxing</span>
-        </label>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            cursor: "pointer",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showActivities.run}
-            onChange={(e) =>
-              setShowActivities({ ...showActivities, run: e.target.checked })
-            }
-          />
-          <span>🏃 Running</span>
-        </label>
+      <div className="activities-section">
+        <div className="field-label activity-filter-heading">
+          Activity filters
+        </div>
+        <ActivityButtons
+          activities={showActivities}
+          onChange={(next) => setShowActivities(next)}
+        />
       </div>
 
       <div className="chart">
