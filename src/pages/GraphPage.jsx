@@ -146,7 +146,7 @@ export default function GraphPage({ currentUser }) {
     );
 
   return (
-<div className="graph-container">
+    <div className="graph-container">
       <div className="graph-header">
         <h2>Weight Graph</h2>
       </div>
