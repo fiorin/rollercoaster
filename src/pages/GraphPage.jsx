@@ -56,27 +56,36 @@ export default function GraphPage({ currentUser }) {
     return { labels: daily.map((d) => d.date), raw, m7, m30, daily };
   }, [filtered, from, to]);
 
-  const activityDaily = useMemo(() => {
-    return series.daily.map((day, index) => {
-      const record = filtered.find((w) => w.date.slice(0, 10) === day.date);
-      return {
-        date: day.date,
-        gym: record?.activities?.gym ? 1 : 0,
-        bike: record?.activities?.bike ? 1 : 0,
-        boxing: record?.activities?.boxing ? 1 : 0,
-        run: record?.activities?.run ? 1 : 0,
-        kg: day.kg,
-      };
-    });
-  }, [series.daily, filtered]);
+  const recordsByDate = useMemo(
+    () => new Map(filtered.map((w) => [w.date.slice(0, 10), w])),
+    [filtered],
+  );
 
-  const activityCharts = useMemo(() => {
-    return ACTIVITIES.map((activity) => {
-      const data = activityDaily.map((day) => day[activity.key]);
-      const count = data.reduce((sum, value) => sum + value, 0);
-      return { ...activity, data, count };
-    }).filter((activity) => activity.count > 0);
-  }, [activityDaily]);
+  const activityDaily = useMemo(
+    () =>
+      series.daily.map((day) => {
+        const record = recordsByDate.get(day.date);
+        return {
+          date: day.date,
+          kg: day.kg,
+          gym: record?.activities?.gym ? 1 : 0,
+          bike: record?.activities?.bike ? 1 : 0,
+          boxing: record?.activities?.boxing ? 1 : 0,
+          run: record?.activities?.run ? 1 : 0,
+        };
+      }),
+    [series.daily, recordsByDate],
+  );
+
+  const activityCharts = useMemo(
+    () =>
+      ACTIVITIES.map((activity) => {
+        const data = activityDaily.map((day) => day[activity.key]);
+        const count = data.reduce((sum, value) => sum + value, 0);
+        return { ...activity, data, count };
+      }).filter((activity) => activity.count > 0),
+    [activityDaily],
+  );
 
   const activityDatasets = useMemo(() => {
     const activityColorMap = {
@@ -95,6 +104,7 @@ export default function GraphPage({ currentUser }) {
         return [
           ...datasets,
           {
+            key: activity,
             label: activity.charAt(0).toUpperCase() + activity.slice(1),
             data: activityData,
             borderColor: activityColorMap[activity],
@@ -117,7 +127,7 @@ export default function GraphPage({ currentUser }) {
   const activityValues = useMemo(
     () =>
       activityDatasets.reduce((memo, dataset) => {
-        memo[dataset.label.toLowerCase()] = dataset.data;
+        memo[dataset.key] = dataset.data;
         return memo;
       }, {}),
     [activityDatasets],

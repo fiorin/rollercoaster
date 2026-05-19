@@ -1,5 +1,18 @@
 import { supabase } from "../lib/supabaseClient";
 
+function normalizeWeightRecord(w) {
+  return {
+    id: w.id,
+    date: w.date,
+    weight: w.kg,
+    person_id: w.personId,
+    gym: w.activities?.gym || false,
+    bike: w.activities?.bike || false,
+    gloves: w.activities?.boxing || false,
+    running: w.activities?.run || false,
+  };
+}
+
 // People
 export async function loadPeople() {
   const { data, error } = await supabase
@@ -25,6 +38,30 @@ export async function savePeople(list) {
   return data;
 }
 
+export async function savePerson(person) {
+  if (!person || typeof person !== "object") {
+    throw new Error("savePerson expects an object");
+  }
+  const { data, error } = await supabase.from("people").upsert([person]);
+  if (error) {
+    console.error("savePerson error", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function deletePerson(id) {
+  if (!id) {
+    throw new Error("deletePerson expects an id");
+  }
+  const { data, error } = await supabase.from("people").delete().eq("id", id);
+  if (error) {
+    console.error("deletePerson error", error);
+    throw error;
+  }
+  return data;
+}
+
 // Weights
 export async function loadWeights() {
   // use the view that joins people info if available
@@ -36,7 +73,6 @@ export async function loadWeights() {
     console.error("loadWeights error", error);
     return [];
   }
-  // Transform from DB schema to component schema (snake_case -> camelCase)
   return (data || []).map((w) => ({
     id: w.id,
     date: w.date,
@@ -46,7 +82,7 @@ export async function loadWeights() {
     activities: {
       gym: w.gym || false,
       bike: w.bike || false,
-      boxing: w.gloves || false, // map gloves to boxing for UI
+      boxing: w.gloves || false,
       run: w.running || false,
     },
   }));
@@ -56,20 +92,36 @@ export async function saveWeights(list) {
   if (!Array.isArray(list)) {
     throw new Error("saveWeights expects an array");
   }
-  // Transform from component schema back to DB schema
-  const toSave = list.map((w) => ({
-    id: w.id,
-    date: w.date,
-    weight: w.kg,
-    person_id: w.personId,
-    gym: w.activities?.gym || false,
-    bike: w.activities?.bike || false,
-    gloves: w.activities?.boxing || false, // map boxing back to gloves
-    running: w.activities?.run || false,
-  }));
+  const toSave = list.map(normalizeWeightRecord);
   const { data, error } = await supabase.from("weights").upsert(toSave);
   if (error) {
     console.error("saveWeights error", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function saveWeight(weight) {
+  if (!weight || typeof weight !== "object") {
+    throw new Error("saveWeight expects an object");
+  }
+  const { data, error } = await supabase
+    .from("weights")
+    .upsert([normalizeWeightRecord(weight)]);
+  if (error) {
+    console.error("saveWeight error", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteWeight(id) {
+  if (!id) {
+    throw new Error("deleteWeight expects an id");
+  }
+  const { data, error } = await supabase.from("weights").delete().eq("id", id);
+  if (error) {
+    console.error("deleteWeight error", error);
     throw error;
   }
   return data;
@@ -83,10 +135,9 @@ export function uid() {
   ) {
     return crypto.randomUUID();
   }
-  // Fallback UUID generator
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }

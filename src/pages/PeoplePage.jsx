@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
 import PeopleForm from "../components/PeopleForm";
 import PeopleList from "../components/PeopleList";
-import { savePeople } from "../utils/storage";
+import { savePerson, deletePerson } from "../utils/storage";
 import { useData } from "../contexts/DataContext";
 
 export default function PeoplePage() {
@@ -9,12 +9,14 @@ export default function PeoplePage() {
 
   const add = useCallback(
     async (p) => {
+      const previous = people;
       const next = [...people, p];
       updatePeople(next);
       try {
-        await savePeople(next);
+        await savePerson(p);
       } catch (err) {
         console.error("Error saving people", err);
+        updatePeople(previous);
       }
     },
     [people, updatePeople],
@@ -22,12 +24,14 @@ export default function PeoplePage() {
 
   const del = useCallback(
     async (id) => {
+      const previous = people;
       const next = people.filter((p) => p.id !== id);
       updatePeople(next);
       try {
-        await savePeople(next);
+        await deletePerson(id);
       } catch (err) {
         console.error("Error deleting person", err);
+        updatePeople(previous);
       }
     },
     [people, updatePeople],

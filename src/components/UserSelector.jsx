@@ -9,15 +9,20 @@ export default function UserSelector({ onUserChange }) {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    if (!people.length) return;
+
     const saved = localStorage.getItem(SELECTED_USER_KEY);
-    if (saved) {
-      const user = people.find((p) => p.id === saved);
-      if (user) {
-        setSelectedUser(user);
-        onUserChange?.(user);
-      }
+    const selectedUserFromStorage = saved
+      ? people.find((p) => p.id === saved)
+      : null;
+    const userToSelect = selectedUserFromStorage || people[0];
+
+    if (!selectedUser || selectedUser.id !== userToSelect.id) {
+      setSelectedUser(userToSelect);
+      onUserChange?.(userToSelect);
+      localStorage.setItem(SELECTED_USER_KEY, userToSelect.id);
     }
-  }, [people, onUserChange]);
+  }, [people, onUserChange, selectedUser]);
 
   const selectUser = (user) => {
     setSelectedUser(user);

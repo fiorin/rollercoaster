@@ -6,7 +6,7 @@ import React, {
   Suspense,
   useCallback,
 } from "react";
-import { saveWeights } from "../utils/storage";
+import { saveWeight, deleteWeight, uid } from "../utils/storage";
 import { useData } from "../contexts/DataContext";
 import WeightList from "../components/WeightList";
 
@@ -78,18 +78,20 @@ export default function WeightsPage({ currentUser }) {
 
   const addOrUpdate = useCallback(
     async (w) => {
-      let next;
-      if (w.id) {
-        next = weights.map((x) => (x.id === w.id ? w : x));
-      } else {
-        w.id = Date.now().toString(36);
-        next = [...weights, w];
-      }
+      const previous = weights;
+      const nextWeight = {
+        ...w,
+        id: w.id || uid(),
+      };
+      const next = w.id
+        ? weights.map((x) => (x.id === w.id ? nextWeight : x))
+        : [...weights, nextWeight];
       updateWeights(next);
       try {
-        await saveWeights(next);
+        await saveWeight(nextWeight);
       } catch (err) {
         console.error("Error saving weights", err);
+        updateWeights(previous);
       }
     },
     [weights, updateWeights],
@@ -97,12 +99,14 @@ export default function WeightsPage({ currentUser }) {
 
   const del = useCallback(
     async (id) => {
+      const previous = weights;
       const next = weights.filter((w) => w.id !== id);
       updateWeights(next);
       try {
-        await saveWeights(next);
+        await deleteWeight(id);
       } catch (err) {
         console.error("Error deleting weight", err);
+        updateWeights(previous);
       }
     },
     [weights, updateWeights],

@@ -11,17 +11,20 @@ import {
 import dayjs from "dayjs";
 
 function computeForecast(series, daysAhead = 7) {
-  const points = series.raw.map((value, index) => ({ x: index, y: value }));
+  const points = series.raw
+    .map((value, index) => ({ x: index, y: value }))
+    .filter((point) => typeof point.y === "number" && !Number.isNaN(point.y));
   const n = points.length;
   if (n < 2) return [];
   const sumX = points.reduce((sum, p) => sum + p.x, 0);
   const sumY = points.reduce((sum, p) => sum + p.y, 0);
   const sumXY = points.reduce((sum, p) => sum + p.x * p.y, 0);
   const sumXX = points.reduce((sum, p) => sum + p.x * p.x, 0);
-  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX || 1);
+  const denominator = n * sumXX - sumX * sumX;
+  const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
   const intercept = (sumY - slope * sumX) / n;
-  const lastIndex = n - 1;
-  const today = dayjs(series.labels[lastIndex]);
+  const lastIndex = points[n - 1].x;
+  const today = dayjs(series.labels[series.labels.length - 1]);
 
   return Array.from({ length: daysAhead }, (_, i) => {
     const nextIndex = lastIndex + i + 1;

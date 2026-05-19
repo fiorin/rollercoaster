@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useData } from "../contexts/DataContext";
-import { saveWeights } from "../utils/storage";
+import { saveWeight } from "../utils/storage";
 import dayjs from "dayjs";
 
 export default function CalendarPage({ currentUser }) {
@@ -74,11 +74,7 @@ export default function CalendarPage({ currentUser }) {
     };
 
     try {
-      const nextWeights = [
-        ...userWeights.filter((w) => w.date.slice(0, 10) !== selectedDate),
-        nextEntry,
-      ];
-      await saveWeights(nextWeights);
+      await saveWeight(nextEntry);
       await refreshData();
       setMessage(existingEntry ? "✅ Weight updated!" : "✅ Weight added!");
       setTimeout(() => setMessage(""), 2000);

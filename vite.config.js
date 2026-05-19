@@ -7,6 +7,25 @@ export default defineConfig({
     react(),
     ...(process.env.ANALYZE === "true" ? [bundleAnalyzer()] : []),
   ],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
+  server: {
+    host: "localhost",
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+      port: 5173,
+    },
+  },
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: "src/setupTests.js",
+    include: ["src/**/*.{test,spec}.{js,jsx}"],
+  },
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {

@@ -17,7 +17,10 @@ function MainWeightChart({ chartData, showActivities }) {
       <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="date" />
-        <YAxis domain={[0, 150]} label={{ value: 'Weight (kg)', angle: -90, position: 'insideLeft' }} />
+        <YAxis
+          domain={["dataMin - 5", "dataMax + 5"]}
+          label={{ value: "Weight (kg)", angle: -90, position: "insideLeft" }}
+        />
         <Tooltip />
         <Legend />
         <Line
