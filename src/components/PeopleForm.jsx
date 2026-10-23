@@ -1,52 +1,91 @@
 import React, { memo, useState } from "react";
 import { uid } from "../utils/storage";
 
-function PeopleForm({ onAdd }) {
+const AVAILABLE_AVATARS = [1, 2, 3, 4];
+
+function AvatarOption({ id, selected, onSelect }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`avatar-btn ${selected ? "sel" : ""}`}
+      onClick={() => onSelect(id)}
+      aria-label={`Avatar ${id}`}
+      aria-pressed={selected}
+    >
+      {failed ? (
+        <span className="avatar-fallback">{id}</span>
+      ) : (
+        <img
+          src={`/avatars/avatar-${id}.png`}
+          alt=""
+          onError={() => setFailed(true)}
+        />
+      )}
+    </button>
+  );
+}
+
+function PeopleForm({ onAdd, disabled = false }) {
   const [name, setName] = useState("");
   const [avatarId, setAvatarId] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit(e) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    onAdd({ id: uid(), name: name.trim(), avatar_id: avatarId });
-    setName("");
-    setAvatarId(1);
+  async function submit(event) {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || submitting) return;
+
+    setSubmitting(true);
+    try {
+      // Only clear the form once the save actually succeeded; on a failure the
+      // caller shows a toast and the user keeps what they typed.
+      await onAdd({ id: uid(), name: trimmed, avatar_id: avatarId });
+      setName("");
+      setAvatarId(1);
+    } catch {
+      /* handled by the caller */
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <form className="people-form card" onSubmit={submit}>
       <div className="form-field">
-        <label className="field-label">Name</label>
+        <label className="field-label" htmlFor="person-name">
+          Name
+        </label>
         <input
+          id="person-name"
           className="form-control"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(event) => setName(event.target.value)}
           placeholder="Name"
         />
       </div>
 
       <div className="form-field">
-        <label className="field-label">Avatar</label>
+        <span className="field-label">Avatar</span>
         <div className="avatars">
-          {Array.from({ length: 2 }).map((_, i) => {
-            const n = i + 1;
-            return (
-              <button
-                type="button"
-                key={n}
-                className={`avatar-btn ${avatarId === n ? "sel" : ""}`}
-                onClick={() => setAvatarId(n)}
-              >
-                <img src={`/avatars/avatar-${n}.png`} alt={`Avatar ${n}`} />
-              </button>
-            );
-          })}
+          {AVAILABLE_AVATARS.map((id) => (
+            <AvatarOption
+              key={id}
+              id={id}
+              selected={avatarId === id}
+              onSelect={setAvatarId}
+            />
+          ))}
         </div>
       </div>
 
       <div className="form-actions">
-        <button className="primary" type="submit">
-          Add person
+        <button
+          className="primary"
+          type="submit"
+          disabled={disabled || submitting}
+        >
+          {submitting ? "Adding…" : "Add person"}
         </button>
       </div>
     </form>

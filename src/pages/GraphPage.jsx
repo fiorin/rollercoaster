@@ -1,32 +1,19 @@
-import React, { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import React, { useMemo, useState, lazy, Suspense } from "react";
 import { useData } from "../contexts/DataContext";
 import { ACTIVITIES } from "../utils/activities";
 import { toDailySeries, movingAverage } from "../utils/movingAverage";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Scatter,
-} from "recharts";
-import dayjs from "dayjs";
+import { dateKey, todayKey, addDays } from "../utils/date";
 import ActivityButtons from "../components/ActivityButtons";
 
 const ActivityCharts = lazy(() => import("../components/ActivityCharts"));
 const MainWeightChart = lazy(() => import("../components/MainWeightChart"));
 const ForecastChart = lazy(() => import("../components/ForecastChart"));
 
-export default function GraphPage({ currentUser }) {
-  const { weights, people, loading } = useData();
-  const [personId, setPersonId] = useState("");
-  const [from, setFrom] = useState(
-    dayjs().subtract(30, "day").format("YYYY-MM-DD"),
-  );
-  const [to, setTo] = useState(dayjs().format("YYYY-MM-DD"));
+export default function GraphPage() {
+  const { weightsByPerson, people, loading, currentUser } = useData();
+  const [personIdOverride, setPersonIdOverride] = useState("");
+  const [from, setFrom] = useState(() => addDays(todayKey(), -29));
+  const [to, setTo] = useState(todayKey);
   const [showActivities, setShowActivities] = useState({
     gym: true,
     bike: true,
@@ -34,32 +21,54 @@ export default function GraphPage({ currentUser }) {
     run: true,
   });
 
-  useEffect(() => {
-    if (currentUser) {
-      setPersonId(currentUser.id);
-    } else if (people[0] && !personId) {
-      setPersonId(people[0].id);
-    }
-  }, [people, currentUser]);
+  const personId = personIdOverride || currentUser?.id || people[0]?.id || "";
+
+  function handleFromChange(value) {
+    // An emptied date input must not break the range: the series would become
+    // invalid and the charts would silently go blank.
+    if (!value) return;
+    setFrom(value);
+    if (value > to) setTo(value);
+  }
+
+  function handleToChange(value) {
+    if (!value) return;
+    setTo(value);
+    if (value < from) setFrom(value);
+  }
 
   const filtered = useMemo(
-    () => weights.filter((w) => w.personId === personId),
-    [weights, personId],
+    () => weightsByPerson.get(personId) || [],
+    [weightsByPerson, personId],
   );
 
+  const recordsByDate = useMemo(() => {
+    const map = new Map();
+    for (const entry of filtered) {
+      map.set(dateKey(entry.date), entry);
+    }
+    return map;
+  }, [filtered]);
+
   const series = useMemo(() => {
-    const pts = filtered.map((w) => ({ date: w.date.slice(0, 10), kg: w.kg }));
-    const daily = toDailySeries(pts, from, to);
+    const points = filtered.map((w) => ({ date: dateKey(w.date), kg: w.kg }));
+    const daily = toDailySeries(points, from, to);
     const raw = daily.map((d) => d.kg);
     const m7 = movingAverage(daily, 7);
     const m30 = movingAverage(daily, 30);
-    return { labels: daily.map((d) => d.date), raw, m7, m30, daily };
-  }, [filtered, from, to]);
 
-  const recordsByDate = useMemo(
-    () => new Map(filtered.map((w) => [w.date.slice(0, 10), w])),
-    [filtered],
-  );
+    // Only the days that actually have a measurement. The forecast regression
+    // must not see the carried-forward values, otherwise the flat tail drags
+    // the slope towards zero.
+    const measured = [];
+    daily.forEach((day, index) => {
+      if (recordsByDate.has(day.date) && day.kg != null) {
+        measured.push({ x: index, y: day.kg });
+      }
+    });
+
+    return { labels: daily.map((d) => d.date), raw, m7, m30, daily, measured };
+  }, [filtered, from, to, recordsByDate]);
 
   const activityDaily = useMemo(
     () =>
@@ -87,66 +96,33 @@ export default function GraphPage({ currentUser }) {
     [activityDaily],
   );
 
-  const activityDatasets = useMemo(() => {
-    const activityColorMap = {
-      gym: "#FBC02D",
-      bike: "#4CAF50",
-      boxing: "#F44336",
-      run: "#2196F3",
-    };
-
-    return Object.entries(showActivities).reduce(
-      (datasets, [activity, show]) => {
-        if (!show) return datasets;
-        const activityData = activityDaily.map((day) =>
-          day[activity] ? day.kg : null,
-        );
-        return [
-          ...datasets,
-          {
-            key: activity,
-            label: activity.charAt(0).toUpperCase() + activity.slice(1),
-            data: activityData,
-            borderColor: activityColorMap[activity],
-            backgroundColor: activityColorMap[activity],
-            borderWidth: 0,
-            pointRadius: 6,
-            pointStyle: "rectRounded",
-            pointBackgroundColor: activityColorMap[activity],
-            pointBorderColor: "var(--bg-white)",
-            pointBorderWidth: 2,
-            showLine: false,
-            tension: 0,
-          },
-        ];
-      },
-      [],
-    );
+  const activityValues = useMemo(() => {
+    const values = {};
+    for (const activity of Object.keys(showActivities)) {
+      if (!showActivities[activity]) continue;
+      values[activity] = activityDaily.map((day) =>
+        day[activity] ? day.kg : null,
+      );
+    }
+    return values;
   }, [showActivities, activityDaily]);
 
-  const activityValues = useMemo(
+  const chartData = useMemo(
     () =>
-      activityDatasets.reduce((memo, dataset) => {
-        memo[dataset.key] = dataset.data;
-        return memo;
-      }, {}),
-    [activityDatasets],
+      series.labels
+        .map((date, index) => ({
+          date,
+          weight: series.raw[index],
+          avg7: series.m7[index],
+          avg30: series.m30[index],
+          gym: activityValues.gym?.[index] ?? null,
+          bike: activityValues.bike?.[index] ?? null,
+          boxing: activityValues.boxing?.[index] ?? null,
+          run: activityValues.run?.[index] ?? null,
+        }))
+        .filter((item) => item.weight !== null),
+    [series, activityValues],
   );
-
-  const chartData = useMemo(() => {
-    return series.labels
-      .map((date, index) => ({
-        date,
-        weight: series.raw[index],
-        avg7: series.m7[index],
-        avg30: series.m30[index],
-        gym: activityValues.gym?.[index] ?? null,
-        bike: activityValues.bike?.[index] ?? null,
-        boxing: activityValues.boxing?.[index] ?? null,
-        run: activityValues.run?.[index] ?? null,
-      }))
-      .filter((item) => item.weight !== null);
-  }, [series, activityValues]);
 
   if (loading)
     return (
@@ -162,17 +138,17 @@ export default function GraphPage({ currentUser }) {
       </div>
 
       <div className="filters">
-        {!currentUser && (
+        {people.length > 1 && (
           <div className="form-field">
             <span className="field-label">Person</span>
             <select
               className="form-control"
               value={personId}
-              onChange={(e) => setPersonId(e.target.value)}
+              onChange={(event) => setPersonIdOverride(event.target.value)}
             >
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
                 </option>
               ))}
             </select>
@@ -185,7 +161,8 @@ export default function GraphPage({ currentUser }) {
               className="form-control"
               type="date"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              max={to}
+              onChange={(event) => handleFromChange(event.target.value)}
             />
           </label>
           <label className="inline-field">
@@ -194,9 +171,33 @@ export default function GraphPage({ currentUser }) {
               className="form-control"
               type="date"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              min={from}
+              onChange={(event) => handleToChange(event.target.value)}
             />
           </label>
+        </div>
+        <div className="date-range-presets">
+          {[
+            { label: "7d", days: 7 },
+            { label: "30d", days: 30 },
+            { label: "90d", days: 90 },
+            { label: "1a", days: 365 },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              className="chip"
+              onClick={() => {
+                // Both bounds are anchored to today, otherwise a custom "To"
+                // date would silently stretch the window.
+                const end = todayKey();
+                setFrom(addDays(end, -(preset.days - 1)));
+                setTo(end);
+              }}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
       </div>
 

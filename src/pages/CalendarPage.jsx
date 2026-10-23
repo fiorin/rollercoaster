@@ -1,13 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useData } from "../contexts/DataContext";
-import { saveWeight } from "../utils/storage";
-import dayjs from "dayjs";
+import { ACTIVITIES } from "../utils/activities";
+import { uid } from "../utils/storage";
+import {
+  addMonths,
+  dateKey,
+  daysInMonth,
+  dayOfWeek,
+  formatLong,
+  formatMonthYear,
+  monthDayKey,
+  startOfMonthKey,
+  todayKey,
+} from "../utils/date";
 
-export default function CalendarPage({ currentUser }) {
-  const { weights, refreshData, loading } = useData();
-  const [selectedDate, setSelectedDate] = useState(
-    dayjs().format("YYYY-MM-DD"),
-  );
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export default function CalendarPage() {
+  const { weightsByPerson, currentUser, saveWeightEntry, toast } = useData();
+  const [selectedDate, setSelectedDate] = useState(todayKey);
   const [kg, setKg] = useState("");
   const [activities, setActivities] = useState({
     gym: false,
@@ -15,31 +26,30 @@ export default function CalendarPage({ currentUser }) {
     boxing: false,
     run: false,
   });
-  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const userWeights = useMemo(() => {
     if (!currentUser) return [];
-    return weights.filter((w) => w.personId === currentUser.id);
-  }, [currentUser, weights]);
+    return weightsByPerson.get(currentUser.id) || [];
+  }, [weightsByPerson, currentUser]);
 
   const weightsByDate = useMemo(() => {
     const map = new Map();
-    userWeights.forEach((w) => {
-      map.set(w.date.slice(0, 10), w);
-    });
+    for (const entry of userWeights) {
+      map.set(dateKey(entry.date), entry);
+    }
     return map;
   }, [userWeights]);
 
-  const currentMonth = dayjs(selectedDate);
-  const daysInMonth = currentMonth.daysInMonth();
-  const firstDay = currentMonth.startOf("month").day();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const emptyDays = Array.from({ length: firstDay }, (_, i) => i);
+  const totalDays = daysInMonth(selectedDate);
+  const firstWeekday = dayOfWeek(startOfMonthKey(selectedDate));
+  const days = Array.from({ length: totalDays }, (_, index) => index + 1);
+  const emptyDays = Array.from({ length: firstWeekday }, (_, index) => index);
 
   useEffect(() => {
     const entry = weightsByDate.get(selectedDate);
     if (entry) {
-      setKg(entry.kg.toString());
+      setKg(String(entry.kg));
       setActivities({
         gym: entry.activities?.gym || false,
         bike: entry.activities?.bike || false,
@@ -54,158 +64,117 @@ export default function CalendarPage({ currentUser }) {
 
   const onAddWeight = useCallback(async () => {
     if (!currentUser) {
-      setMessage("Select a user first");
+      toast("Selecione um usuário primeiro", "error");
       return;
     }
     if (!kg.trim()) {
-      setMessage("Enter a weight");
+      toast("Informe um peso", "error");
+      return;
+    }
+
+    const value = Number(kg);
+    if (Number.isNaN(value)) {
+      toast("Peso inválido", "error");
       return;
     }
 
     const existingEntry = weightsByDate.get(selectedDate);
-    const entryId =
-      existingEntry?.id || `${currentUser.id}-${selectedDate}-${Date.now()}`;
     const nextEntry = {
-      id: entryId,
+      // Reuse the existing id so the database unique constraint on
+      // (person_id, date) updates the row instead of rejecting the insert.
+      id: existingEntry?.id || uid(),
       personId: currentUser.id,
       date: selectedDate,
-      kg: parseFloat(kg),
+      kg: value,
       activities,
+      // Keep the note the user may have written in the full editor.
+      notes: existingEntry?.notes || "",
     };
 
+    setSaving(true);
     try {
-      await saveWeight(nextEntry);
-      await refreshData();
-      setMessage(existingEntry ? "✅ Weight updated!" : "✅ Weight added!");
-      setTimeout(() => setMessage(""), 2000);
+      await saveWeightEntry(nextEntry);
+      toast(existingEntry ? "Peso atualizado" : "Peso adicionado", "success");
     } catch (err) {
-      setMessage("❌ Failed to save");
-      console.error(err);
+      toast(err.message || "Não foi possível salvar", "error");
+    } finally {
+      setSaving(false);
     }
   }, [
     currentUser,
     selectedDate,
     kg,
     activities,
-    userWeights,
     weightsByDate,
-    refreshData,
+    saveWeightEntry,
+    toast,
   ]);
 
   const onPrevMonth = () => {
-    setSelectedDate(currentMonth.subtract(1, "month").format("YYYY-MM-DD"));
+    setSelectedDate(addMonths(selectedDate, -1));
   };
 
   const onNextMonth = () => {
-    setSelectedDate(currentMonth.add(1, "month").format("YYYY-MM-DD"));
+    setSelectedDate(addMonths(selectedDate, 1));
   };
 
   const getDateClass = (day) => {
-    const dateStr = currentMonth.date(day).format("YYYY-MM-DD");
-    const hasEntry = weightsByDate.has(dateStr);
-    const isSelected = dateStr === selectedDate;
-    const isToday = dateStr === dayjs().format("YYYY-MM-DD");
-
+    const dateStr = monthDayKey(selectedDate, day);
     let className = "calendar-day";
-    if (hasEntry) className += " logged";
-    if (isSelected) className += " selected";
-    if (isToday) className += " today";
+    if (weightsByDate.has(dateStr)) className += " logged";
+    if (dateStr === selectedDate) className += " selected";
+    if (dateStr === todayKey()) className += " today";
     return className;
   };
 
-  if (loading) {
-    return (
-      <div className="spinner-container">
-        <div className="spinner" />
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: "16px" }}>
+    <div className="calendar-page">
       <h2>Calendar</h2>
-      <p style={{ color: "var(--text-secondary)", marginBottom: "20px" }}>
+      <p className="calendar-subtitle">
         View and add weights from any date
       </p>
 
       {/* Month calendar */}
-      <section
-        style={{
-          marginBottom: "24px",
-          padding: "16px",
-          backgroundColor: "var(--bg-secondary)",
-          borderRadius: "12px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "16px",
-          }}
-        >
+      <section className="calendar-section">
+        <div className="calendar-header">
           <button
+            type="button"
+            className="calendar-nav-btn"
             onClick={onPrevMonth}
-            style={{ padding: "8px 12px", cursor: "pointer" }}
+            aria-label="Mês anterior"
           >
             ← Prev
           </button>
-          <h3 style={{ margin: 0 }}>{currentMonth.format("MMMM YYYY")}</h3>
+          <h3>{formatMonthYear(selectedDate)}</h3>
           <button
+            type="button"
+            className="calendar-nav-btn"
             onClick={onNextMonth}
-            style={{ padding: "8px 12px", cursor: "pointer" }}
+            aria-label="Próximo mês"
           >
             Next →
           </button>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "4px",
-          }}
-        >
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div
-              key={day}
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                fontSize: "12px",
-                padding: "8px",
-                color: "var(--text-secondary)",
-              }}
-            >
+        <div className="calendar-grid">
+          {WEEKDAYS.map((day) => (
+            <div key={day} className="calendar-weekday">
               {day}
             </div>
           ))}
-          {emptyDays.map((_, i) => (
-            <div key={`empty-${i}`} style={{ padding: "8px" }} />
+          {emptyDays.map((_, index) => (
+            <div key={`empty-${index}`} className="calendar-empty" />
           ))}
           {days.map((day) => {
-            const dateStr = currentMonth.date(day).format("YYYY-MM-DD");
-            const entry = weightsByDate.get(dateStr);
+            const dateStr = monthDayKey(selectedDate, day);
             return (
               <button
                 key={day}
+                type="button"
                 className={getDateClass(day)}
                 onClick={() => setSelectedDate(dateStr)}
-                style={{
-                  padding: "8px",
-                  border:
-                    selectedDate === dateStr
-                      ? "2px solid #2563eb"
-                      : "1px solid var(--border)",
-                  borderRadius: "6px",
-                  backgroundColor: weightsByDate.has(dateStr)
-                    ? "var(--primary)"
-                    : "transparent",
-                  color: weightsByDate.has(dateStr) ? "white" : "var(--text)",
-                  cursor: "pointer",
-                  fontWeight: selectedDate === dateStr ? "bold" : "normal",
-                }}
+                aria-label={`Dia ${day}`}
+                aria-pressed={selectedDate === dateStr}
               >
                 {day}
               </button>
@@ -215,114 +184,63 @@ export default function CalendarPage({ currentUser }) {
       </section>
 
       {/* Quick add form */}
-      <section
-        style={{
-          padding: "16px",
-          backgroundColor: "var(--bg-secondary)",
-          borderRadius: "12px",
-        }}
-      >
-        <h3>Add weight for {dayjs(selectedDate).format("DD MMM YYYY")}</h3>
+      <section className="calendar-section">
+        <h3>Add weight for {formatLong(selectedDate)}</h3>
 
         {weightsByDate.has(selectedDate) && (
-          <div
-            style={{
-              marginBottom: "12px",
-              padding: "12px",
-              backgroundColor: "var(--bg-white)",
-              borderRadius: "8px",
-              fontSize: "14px",
-            }}
-          >
+          <div className="calendar-logged-note">
             📝 Already logged: {weightsByDate.get(selectedDate).kg} kg
           </div>
         )}
 
-        <div style={{ marginBottom: "12px" }}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "6px",
-              fontWeight: "bold",
-            }}
-          >
-            Weight (kg)
-          </label>
+        <div className="calendar-field">
+          <label htmlFor="calendar-weight">Weight (kg)</label>
           <input
+            id="calendar-weight"
             type="number"
+            inputMode="decimal"
             step="0.1"
             value={kg}
-            onChange={(e) => setKg(e.target.value)}
+            onChange={(event) => setKg(event.target.value)}
             placeholder="e.g. 75.5"
-            style={{
-              width: "100%",
-              padding: "10px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-            }}
           />
         </div>
 
-        <div style={{ marginBottom: "12px" }}>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "8px",
-              fontWeight: "bold",
-            }}
-          >
-            Activities
-          </label>
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            {[
-              { key: "gym", label: "💪 Gym" },
-              { key: "bike", label: "🚴 Bike" },
-              { key: "boxing", label: "🥊 Boxing" },
-              { key: "run", label: "🏃 Running" },
-            ].map(({ key, label }) => (
-              <label
-                key={key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                }}
-              >
+        <div className="calendar-field">
+          <span>Activities</span>
+          <div className="calendar-activities">
+            {ACTIVITIES.map(({ key, label, icon }) => (
+              <label key={key}>
                 <input
                   type="checkbox"
                   checked={activities[key]}
-                  onChange={(e) =>
-                    setActivities({ ...activities, [key]: e.target.checked })
+                  onChange={(event) =>
+                    setActivities({
+                      ...activities,
+                      [key]: event.target.checked,
+                    })
                   }
                 />
-                <span>{label}</span>
+                <span>
+                  {icon} {label}
+                </span>
               </label>
             ))}
           </div>
         </div>
 
         <button
-          className="primary"
+          type="button"
+          className="primary calendar-submit"
           onClick={onAddWeight}
-          style={{ width: "100%" }}
+          disabled={saving}
         >
-          {weightsByDate.has(selectedDate) ? "Update weight" : "Add weight"}
+          {saving
+            ? "Salvando…"
+            : weightsByDate.has(selectedDate)
+              ? "Update weight"
+              : "Add weight"}
         </button>
-
-        {message && (
-          <div
-            style={{
-              marginTop: "12px",
-              padding: "12px",
-              backgroundColor: "var(--bg-white)",
-              borderRadius: "8px",
-              textAlign: "center",
-            }}
-          >
-            {message}
-          </div>
-        )}
       </section>
     </div>
   );

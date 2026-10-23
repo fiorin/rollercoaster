@@ -1,5 +1,5 @@
 import React from "react";
-import { ACTIVITIES, getActivityByKey } from "../utils/activities";
+import { getActivityByKey } from "../utils/activities";
 
 /**
  * ActivityButton component for selecting activities

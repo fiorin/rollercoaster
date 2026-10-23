@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from "react";
-import dayjs from "dayjs";
 import { ACTIVITIES } from "../utils/activities";
+import { formatShort } from "../utils/date";
 
 const ITEM_HEIGHT = 60;
 const BUFFER = 5;
@@ -21,43 +21,41 @@ const WeightList = React.memo(function WeightList({
   );
 
   const [visibleStart, setVisibleStart] = useState(0);
-  const [containerHeight, setContainerHeight] = useState(600);
+  const [containerHeight, setContainerHeight] = useState(0);
   const containerRef = useRef(null);
 
-  function personName(id) {
-    return personMap[id] || "-";
-  }
-
   const sortedWeights = useMemo(
-    () => [...weights].sort((a, b) => new Date(b.date) - new Date(a.date)),
+    () =>
+      [...weights].sort((a, b) =>
+        a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+      ),
     [weights],
   );
 
   const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT) + BUFFER * 2;
-  const visibleStart_ = Math.max(0, visibleStart - BUFFER);
+  const visibleStartClamped = Math.max(0, visibleStart - BUFFER);
   const visibleEnd = Math.min(
     sortedWeights.length,
-    visibleStart_ + visibleCount,
+    visibleStartClamped + visibleCount,
   );
 
-  const visibleItems = sortedWeights.slice(visibleStart_, visibleEnd);
-  const offsetY = visibleStart_ * ITEM_HEIGHT;
+  const visibleItems = sortedWeights.slice(visibleStartClamped, visibleEnd);
+  const offsetY = visibleStartClamped * ITEM_HEIGHT;
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) return undefined;
 
     const observer = new ResizeObserver(() => {
       setContainerHeight(container.clientHeight);
     });
     observer.observe(container);
 
-    const handleScroll = () => {
-      const scrollTop = container.scrollTop;
-      setVisibleStart(Math.floor(scrollTop / ITEM_HEIGHT));
-    };
+    function handleScroll() {
+      setVisibleStart(Math.floor(container.scrollTop / ITEM_HEIGHT));
+    }
 
-    container.addEventListener("scroll", handleScroll);
+    container.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       observer.disconnect();
       container.removeEventListener("scroll", handleScroll);
@@ -65,46 +63,35 @@ const WeightList = React.memo(function WeightList({
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="weight-list"
-      style={{
-        height: "600px",
-        overflow: "auto",
-        position: "relative",
-      }}
-    >
+    <div ref={containerRef} className="weight-list-scroll">
       <div
-        style={{
-          height: `${sortedWeights.length * ITEM_HEIGHT}px`,
-          position: "relative",
-        }}
+        className="weight-list"
+        style={{ height: `${sortedWeights.length * ITEM_HEIGHT}px` }}
       >
         <div
-          style={{
-            transform: `translateY(${offsetY}px)`,
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-          }}
+          className="weight-list-window"
+          style={{ transform: `translateY(${offsetY}px)` }}
         >
-          {visibleItems.map((w) => (
+          {visibleItems.map((entry) => (
             <div
               className="weight-row"
-              key={w.id}
+              key={entry.id}
               style={{ height: `${ITEM_HEIGHT}px` }}
             >
               <div className="w-main">
-                <div className="w-date">{dayjs(w.date).format("MMM DD")}</div>
-                <div className="w-person">{personName(w.personId)}</div>
+                <div className="w-date">{formatShort(entry.date)}</div>
+                <div className="w-person">
+                  {personMap[entry.personId] || "-"}
+                </div>
               </div>
-              <div className="w-weight">{w.kg} kg</div>
+              <div className="w-weight">{entry.kg} kg</div>
               <div className="w-activities">
                 {ACTIVITIES.map((activity) => (
                   <div
                     key={activity.key}
-                    className={`activity-indicator ${activity.key} ${w.activities?.[activity.key] ? "active" : "inactive"}`}
+                    className={`activity-indicator ${activity.key} ${
+                      entry.activities?.[activity.key] ? "active" : "inactive"
+                    }`}
                     title={activity.label}
                   >
                     {activity.icon}
@@ -112,10 +99,20 @@ const WeightList = React.memo(function WeightList({
                 ))}
               </div>
               <div className="w-menu">
-                <button onClick={() => onEdit(w)} title="Edit">
+                <button
+                  type="button"
+                  onClick={() => onEdit(entry)}
+                  title="Edit"
+                  aria-label={`Editar registro de ${formatShort(entry.date)}`}
+                >
                   ✏️
                 </button>
-                <button onClick={() => onDelete(w.id)} title="Delete">
+                <button
+                  type="button"
+                  onClick={() => onDelete(entry)}
+                  title="Delete"
+                  aria-label={`Excluir registro de ${formatShort(entry.date)}`}
+                >
                   🗑️
                 </button>
               </div>

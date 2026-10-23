@@ -8,14 +8,21 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import dayjs from "dayjs";
+import { addDays, formatShort } from "../utils/date";
 
 function computeForecast(series, daysAhead = 7) {
-  const points = series.raw
-    .map((value, index) => ({ x: index, y: value }))
-    .filter((point) => typeof point.y === "number" && !Number.isNaN(point.y));
+  const source = Array.isArray(series.measured)
+    ? series.measured
+    : series.raw
+        .map((value, index) => ({ x: index, y: value }))
+        .filter((point) => typeof point.y === "number" && !Number.isNaN(point.y));
+
+  const points = source.filter(
+    (point) => typeof point.y === "number" && !Number.isNaN(point.y),
+  );
   const n = points.length;
   if (n < 2) return [];
+
   const sumX = points.reduce((sum, p) => sum + p.x, 0);
   const sumY = points.reduce((sum, p) => sum + p.y, 0);
   const sumXY = points.reduce((sum, p) => sum + p.x * p.y, 0);
@@ -24,12 +31,13 @@ function computeForecast(series, daysAhead = 7) {
   const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
   const intercept = (sumY - slope * sumX) / n;
   const lastIndex = points[n - 1].x;
-  const today = dayjs(series.labels[series.labels.length - 1]);
+  // Project from the last measured day, not from the end of the window.
+  const lastDate = series.labels[lastIndex];
 
   return Array.from({ length: daysAhead }, (_, i) => {
     const nextIndex = lastIndex + i + 1;
     return {
-      date: today.add(i + 1, "day").format("YYYY-MM-DD"),
+      date: addDays(lastDate, i + 1),
       forecast: slope * nextIndex + intercept,
     };
   });
@@ -40,7 +48,7 @@ function ForecastChart({ series }) {
     if (!series.labels.length) return [];
     return computeForecast(series, 7).map((point) => ({
       ...point,
-      date: dayjs(point.date).format("MMM D"),
+      date: formatShort(point.date),
     }));
   }, [series]);
 

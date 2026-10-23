@@ -1,68 +1,29 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { useData } from "../contexts/DataContext";
-import dayjs from "dayjs";
-
-const activities = [
-  { key: "gym", label: "Gym", icon: "💪" },
-  { key: "bike", label: "Bike", icon: "🚴" },
-  { key: "boxing", label: "Boxing", icon: "🥊" },
-  { key: "run", label: "Running", icon: "🏃" },
-];
+import { ACTIVITIES } from "../utils/activities";
+import { addDays, dateKey, daysBetween, todayKey } from "../utils/date";
+import { activityDaysInWindow, filledAverage } from "../utils/summary";
 
 function formatDelta(delta) {
   if (delta === null || delta === undefined) return "-";
   return `${delta >= 0 ? "+" : ""}${delta.toFixed(2)} kg`;
 }
 
-function getAverageForDays(sorted, days) {
-  if (!sorted.length) return null;
-  const recent = sorted.slice(-days);
-  return recent.reduce((sum, w) => sum + w.kg, 0) / recent.length;
-}
-
-function getFilledAverageWeight(sorted, days) {
-  if (!sorted.length) return null;
-  const latest = dayjs(sorted[sorted.length - 1].date);
-  const start = latest.subtract(days - 1, "day");
-  const weightByDate = new Map(
-    sorted.map((w) => [dayjs(w.date).format("YYYY-MM-DD"), w.kg]),
-  );
-  let lastKg = sorted[0].kg;
-  const firstDate = dayjs(sorted[0].date);
-
-  if (firstDate.isAfter(start)) {
-    lastKg = sorted[0].kg;
-  }
-
-  let sum = 0;
-  for (let i = 0; i < days; i += 1) {
-    const currentDate = start.add(i, "day");
-    const key = currentDate.format("YYYY-MM-DD");
-    if (weightByDate.has(key)) {
-      lastKg = weightByDate.get(key);
-    }
-    sum += lastKg;
-  }
-
-  return sum / days;
-}
-
-function getActivityDaysInPeriod(sorted, key, days) {
-  if (!sorted.length) return 0;
-  const recent = sorted.slice(-days);
-  return recent.filter((w) => w.activities?.[key]).length;
-}
-
-export default function HomePage({ currentUser }) {
-  const { weights, loading } = useData();
+export default function HomePage() {
+  const { weightsByPerson, currentUser, people, loading } = useData();
 
   const userWeights = useMemo(() => {
     if (!currentUser) return [];
-    return weights.filter((w) => w.personId === currentUser.id);
-  }, [weights, currentUser]);
+    return weightsByPerson.get(currentUser.id) || [];
+  }, [weightsByPerson, currentUser]);
 
   const sortedWeights = useMemo(
-    () => [...userWeights].sort((a, b) => new Date(a.date) - new Date(b.date)),
+    () =>
+      [...userWeights].sort((a, b) => {
+        const left = dateKey(a.date);
+        const right = dateKey(b.date);
+        return left < right ? -1 : left > right ? 1 : 0;
+      }),
     [userWeights],
   );
 
@@ -76,62 +37,66 @@ export default function HomePage({ currentUser }) {
     const currentWeight = latest.kg;
     const totalDelta = currentWeight - initialWeight;
 
-    const avg30 = getFilledAverageWeight(sortedWeights, 30);
-    const avg7 = getFilledAverageWeight(sortedWeights, 7);
+    const weightByDate = new Map(
+      sortedWeights.map((w) => [dateKey(w.date), w.kg]),
+    );
 
-    const startDate = dayjs(oldest.date).format("MMM D, YYYY");
+    const today = todayKey();
+    const avg30 = filledAverage(weightByDate, 30, today);
+    const avg7 = filledAverage(weightByDate, 7, today);
 
     return {
       count,
       currentWeight: currentWeight.toFixed(1),
       initialWeight: initialWeight.toFixed(1),
       totalDelta: totalDelta.toFixed(2),
-      avg30: avg30 ? avg30.toFixed(1) : "-",
-      avg7: avg7 ? avg7.toFixed(1) : "-",
-      startDate,
+      avg30: avg30 != null ? avg30.toFixed(1) : "-",
+      avg7: avg7 != null ? avg7.toFixed(1) : "-",
+      avg7Range: `${addDays(today, -6)} → ${today}`,
+      avg30Range: `${addDays(today, -29)} → ${today}`,
+      startDate: dateKey(oldest.date),
     };
   }, [sortedWeights]);
 
   const activityStats = useMemo(() => {
     if (!sortedWeights.length) return [];
 
-    const daysSinceStart =
-      sortedWeights.length > 0
-        ? dayjs(sortedWeights[sortedWeights.length - 1].date).diff(
-            sortedWeights[0].date,
-            "day",
-          ) + 1
-        : 0;
+    const firstDate = dateKey(sortedWeights[0].date);
+    const today = todayKey();
+    // The rate is per week since tracking started, not since the last entry:
+    // someone who logged three days and stopped two months ago did not train
+    // 3 times a week for the whole period.
+    const daysSinceStart = Math.max(daysBetween(firstDate, today) + 1, 1);
     const weeksSinceStart = Math.max(daysSinceStart / 7, 1);
 
-    return activities
-      .map((activity) => {
-        const totalDays = sortedWeights.filter(
-          (w) => w.activities?.[activity.key],
-        ).length;
-        const last3Days = getActivityDaysInPeriod(
-          sortedWeights,
-          activity.key,
-          3,
-        );
-        const last7Days = getActivityDaysInPeriod(
-          sortedWeights,
-          activity.key,
-          7,
-        );
-        const avgPerWeek = (totalDays / weeksSinceStart).toFixed(1);
+    return ACTIVITIES.map((activity) => {
+      const totalDays = sortedWeights.filter(
+        (w) => w.activities?.[activity.key],
+      ).length;
+      const last3Days = activityDaysInWindow(
+        sortedWeights,
+        activity.key,
+        3,
+        today,
+      );
+      const last7Days = activityDaysInWindow(
+        sortedWeights,
+        activity.key,
+        7,
+        today,
+      );
+      const avgPerWeek = (totalDays / weeksSinceStart).toFixed(1);
 
-        if (totalDays === 0) return null;
+      if (totalDays === 0) return null;
 
-        return {
-          ...activity,
-          totalDays,
-          avgPerWeek,
-          last3Days,
-          last7Days,
-        };
-      })
-      .filter(Boolean);
+      return {
+        ...activity,
+        totalDays,
+        avgPerWeek,
+        last3Days,
+        last7Days,
+      };
+    }).filter(Boolean);
   }, [sortedWeights]);
 
   if (loading) {
@@ -152,7 +117,9 @@ export default function HomePage({ currentUser }) {
       {!currentUser ? (
         <div className="empty-state-card">
           <p>
-            Select a user from the top-right avatar to see activity summaries.
+            {people.length === 0
+              ? "No users yet. Create one in Manage Users to start tracking."
+              : "Select a user from the top-right avatar to see activity summaries."}
           </p>
         </div>
       ) : !summary ? (
@@ -191,12 +158,14 @@ export default function HomePage({ currentUser }) {
               <div className="summary-card">
                 <div className="summary-card-label">Last 7 Days Avg</div>
                 <div className="summary-card-value">{summary.avg7} kg</div>
-                <div className="summary-card-subtext">Last week</div>
+                <div className="summary-card-subtext">{summary.avg7Range}</div>
               </div>
               <div className="summary-card">
                 <div className="summary-card-label">Last 30 Days Avg</div>
                 <div className="summary-card-value">{summary.avg30} kg</div>
-                <div className="summary-card-subtext">Last month</div>
+                <div className="summary-card-subtext">
+                  {summary.avg30Range}
+                </div>
               </div>
             </div>
           </div>

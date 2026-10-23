@@ -1,6 +1,7 @@
 import React, { memo } from "react";
+import PersonAvatar from "./PersonAvatar";
 
-const PeopleList = memo(function PeopleList({ people, onDelete }) {
+const PeopleList = memo(function PeopleList({ people, onDelete, onSelect }) {
   const peopleArray = Array.isArray(people) ? people : [];
 
   if (peopleArray.length === 0) {
@@ -13,24 +14,41 @@ const PeopleList = memo(function PeopleList({ people, onDelete }) {
 
   return (
     <div className="people-list">
-      {peopleArray.map((p) => {
-        const avatarId = p.avatar_id || p.avatar || 1;
-        return (
-          <div key={p.id} className="person-row">
-            <div className="avatar">
-              <img src={`/avatars/avatar-${avatarId}.png`} alt={p.name} />
-            </div>
-            <div className="person-info">
-              <div className="person-name">{p.name}</div>
-            </div>
-            <div className="person-actions">
-              <button onClick={() => onDelete(p.id)} title="Delete">
-                🗑️
-              </button>
-            </div>
+      {peopleArray.map((person) => (
+        <div key={person.id} className="person-row">
+          <div className="avatar">
+            <PersonAvatar person={person} />
           </div>
-        );
-      })}
+          <div
+            className="person-info"
+            onClick={() => onSelect?.(person)}
+            role={onSelect ? "button" : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            onKeyDown={
+              onSelect
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelect(person);
+                    }
+                  }
+                : undefined
+            }
+          >
+            <div className="person-name">{person.name}</div>
+          </div>
+          <div className="person-actions">
+            <button
+              type="button"
+              onClick={() => onDelete(person)}
+              title={`Excluir ${person.name}`}
+              aria-label={`Excluir ${person.name}`}
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 });

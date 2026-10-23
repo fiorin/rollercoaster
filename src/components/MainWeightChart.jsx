@@ -12,6 +12,14 @@ import {
 } from "recharts";
 
 function MainWeightChart({ chartData, showActivities }) {
+  if (!chartData.length) {
+    return (
+      <div className="empty-state-card">
+        <p>No weight entries in the selected range.</p>
+      </div>
+    );
+  }
+
   return (
     <ResponsiveContainer width="100%" height={400}>
       <LineChart data={chartData}>

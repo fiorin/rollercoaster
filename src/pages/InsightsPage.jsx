@@ -1,111 +1,34 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useData } from "../contexts/DataContext";
-import { saveWeights, uid } from "../utils/storage";
-import dayjs from "dayjs";
+import downloadFile from "../utils/download";
+import { getActivityByKey } from "../utils/activities";
+import {
+  mergeWeights,
+  normalizeImportedRecords,
+  parseWeightData,
+  sanitizePersonIds,
+  toCSV,
+} from "../utils/importExport";
+import {
+  addDays,
+  dateKey,
+  daysBetween,
+  formatMonthLabel,
+  formatShort,
+  todayKey,
+  weekStartKey,
+} from "../utils/date";
 
-function parseBool(value) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value !== "string") return false;
-  return /^(true|yes|y|1)$/i.test(value.trim());
-}
-
-function normalizeWeightRecord(record, fallbackPersonId) {
-  if (!record || typeof record !== "object") return null;
-
-  const kgValue =
-    record.kg ??
-    record.weight ??
-    record["weight (kg)"] ??
-    record.weight_kg ??
-    record["weight_kg"];
-  const parsedKg =
-    typeof kgValue === "string"
-      ? parseFloat(kgValue.replace(",", "."))
-      : kgValue;
-  const date = record.date || record.Date;
-  const personId = record.personId || record.person_id || fallbackPersonId;
-  if (!date || Number.isNaN(parsedKg) || !personId) return null;
-
-  return {
-    id: record.id || record.uid || uid(),
-    date: String(date).trim(),
-    kg: Number(parsedKg),
-    personId,
-    activities: {
-      gym: parseBool(record.activities?.gym ?? record.gym),
-      bike: parseBool(record.activities?.bike ?? record.bike),
-      boxing: parseBool(
-        record.activities?.boxing ??
-          record.activities?.gloves ??
-          record.boxing ??
-          record.gloves,
-      ),
-      run: parseBool(
-        record.activities?.run ??
-          record.activities?.running ??
-          record.run ??
-          record.running,
-      ),
-    },
-  };
-}
-
-function normalizeImportedRecords(rawRecords, fallbackPersonId) {
-  return rawRecords
-    .map((item) => normalizeWeightRecord(item, fallbackPersonId))
-    .filter(Boolean);
-}
-
-function parseWeightData(fileText) {
-  try {
-    const parsed = JSON.parse(fileText);
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-    if (parsed?.weights && Array.isArray(parsed.weights)) {
-      return parsed.weights;
-    }
-    if (parsed?.data && Array.isArray(parsed.data)) {
-      return parsed.data;
-    }
-    if (parsed && typeof parsed === "object") {
-      return [parsed];
-    }
-  } catch {
-    const rows = fileText
-      .trim()
-      .split(/\r?\n/)
-      .map((row) => row.split(","));
-    const headers = rows[0]?.map((h) => h.trim().toLowerCase());
-    if (!headers) return [];
-    return rows.slice(1).map((row) => {
-      const item = {};
-      headers.forEach((header, index) => {
-        item[header] = row[index]?.trim();
-      });
-      return item;
-    });
-  }
-  return [];
-}
-
-function mergeWeights(existing, imported) {
-  const merged = new Map(existing.map((w) => [w.id, w]));
-  imported.forEach((item) => {
-    if (item?.id) {
-      merged.set(item.id, item);
-    }
-  });
-  return Array.from(merged.values());
-}
-
-function generateLocalInsights(summary, userWeights) {
+function generateLocalInsights(summary) {
   if (!summary) return [];
 
   const insights = [];
-
-  // Trend insight
   const delta = parseFloat(summary.changeText);
   if (delta > 0) {
     insights.push(
@@ -121,7 +44,6 @@ function generateLocalInsights(summary, userWeights) {
     );
   }
 
-  // Weekly pace
   const weeklyDelta = parseFloat(summary.weeklyDeltaText);
   if (Math.abs(weeklyDelta) < 0.2) {
     insights.push(
@@ -141,7 +63,6 @@ function generateLocalInsights(summary, userWeights) {
     );
   }
 
-  // Activity summary
   if (
     summary.activitySummary &&
     summary.activitySummary !== "No activity data yet"
@@ -149,11 +70,7 @@ function generateLocalInsights(summary, userWeights) {
     insights.push(`🏋️ Activity log: ${summary.activitySummary}`);
   }
 
-  // Entry consistency
-  const consistency = (
-    (summary.entryCount / summary.daysTracked) *
-    100
-  ).toFixed(0);
+  const consistency = ((summary.entryCount / summary.daysTracked) * 100).toFixed(0);
   insights.push(
     `📊 Consistency: ${consistency}% (${summary.entryCount} entries in ${summary.daysTracked} days)`,
   );
@@ -161,123 +78,122 @@ function generateLocalInsights(summary, userWeights) {
   return insights;
 }
 
-function generateWeeklySummaries(userWeights) {
-  if (!userWeights.length) return [];
-
-  const sorted = [...userWeights].sort(
-    (a, b) => new Date(a.date) - new Date(b.date),
-  );
-
-  const weekMap = new Map();
-  sorted.forEach((w) => {
-    const weekStart = dayjs(w.date).startOf("week").format("YYYY-MM-DD");
-    if (!weekMap.has(weekStart)) {
-      weekMap.set(weekStart, []);
-    }
-    weekMap.get(weekStart).push(w);
-  });
-
-  const weeks = Array.from(weekMap.entries())
-    .map(([weekStart, entries]) => {
-      const weights = entries.map((e) => e.kg).sort((a, b) => a - b);
-      const min = weights[0];
-      const max = weights[weights.length - 1];
-      const avg = (weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(
-        1,
-      );
-      return {
-        weekStart,
-        weekEnd: dayjs(weekStart).add(6, "day").format("MMM DD"),
-        min: min.toFixed(1),
-        max: max.toFixed(1),
-        avg,
-        entries: entries.length,
-        delta: (max - min).toFixed(1),
-      };
-    })
-    .sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
-
-  return weeks;
+function groupBy(sorted, keyOf) {
+  const groups = new Map();
+  for (const entry of sorted) {
+    const key = keyOf(entry);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(entry);
+    else groups.set(key, [entry]);
+  }
+  return groups;
 }
 
-function generateMonthlySummaries(userWeights) {
-  if (!userWeights.length) return [];
+function generateWeeklySummaries(sorted) {
+  if (!sorted.length) return [];
 
-  const sorted = [...userWeights].sort(
-    (a, b) => new Date(a.date) - new Date(b.date),
-  );
+  const weeks = [];
+  for (const [weekStart, entries] of groupBy(sorted, (entry) =>
+    weekStartKey(entry.date),
+  )) {
+    const values = entries.map((entry) => entry.kg).sort((a, b) => a - b);
+    const first = entries[0].kg;
+    const last = entries[entries.length - 1].kg;
+    weeks.push({
+      weekStart,
+      weekLabel: `${formatShort(weekStart)} – ${formatShort(addDays(weekStart, 6))}`,
+      first: first.toFixed(1),
+      last: last.toFixed(1),
+      min: values[0].toFixed(1),
+      max: values[values.length - 1].toFixed(1),
+      avg: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1),
+      entries: entries.length,
+      delta: (last - first).toFixed(1),
+    });
+  }
 
-  const monthMap = new Map();
-  sorted.forEach((w) => {
-    const monthKey = dayjs(w.date).format("YYYY-MM");
-    if (!monthMap.has(monthKey)) {
-      monthMap.set(monthKey, []);
-    }
-    monthMap.get(monthKey).push(w);
-  });
-
-  const months = Array.from(monthMap.entries())
-    .map(([monthKey, entries]) => {
-      const weights = entries.map((e) => e.kg).sort((a, b) => a - b);
-      const first = entries[0].kg;
-      const last = entries[entries.length - 1].kg;
-      const min = weights[0];
-      const max = weights[weights.length - 1];
-      const avg = (weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(
-        1,
-      );
-      return {
-        monthKey,
-        month: dayjs(monthKey).format("MMM YYYY"),
-        min: min.toFixed(1),
-        max: max.toFixed(1),
-        avg,
-        first: first.toFixed(1),
-        last: last.toFixed(1),
-        entries: entries.length,
-        delta: (last - first).toFixed(1),
-      };
-    })
-    .sort((a, b) => new Date(b.monthKey) - new Date(a.monthKey));
-
-  return months;
+  return weeks.sort((a, b) => (a.weekStart < b.weekStart ? 1 : -1));
 }
 
-export default function InsightsPage({ currentUser }) {
-  const { weights, people, loading, updateWeights } = useData();
+function generateMonthlySummaries(sorted) {
+  if (!sorted.length) return [];
+
+  const months = [];
+  for (const [monthKey, entries] of groupBy(
+    sorted,
+    (entry) => dateKey(entry.date).slice(0, 7),
+  )) {
+    const values = entries.map((entry) => entry.kg).sort((a, b) => a - b);
+    const first = entries[0].kg;
+    const last = entries[entries.length - 1].kg;
+    months.push({
+      monthKey,
+      monthLabel: formatMonthLabel(monthKey),
+      first: first.toFixed(1),
+      last: last.toFixed(1),
+      min: values[0].toFixed(1),
+      max: values[values.length - 1].toFixed(1),
+      avg: (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1),
+      entries: entries.length,
+      delta: (last - first).toFixed(1),
+    });
+  }
+
+  return months.sort((a, b) => (a.monthKey < b.monthKey ? 1 : -1));
+}
+
+export default function InsightsPage() {
+  const { weights, people, loading, currentUser, importWeights, toast } =
+    useData();
   const [importError, setImportError] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
   const [connectedRecords, setConnectedRecords] = useState([]);
   const [summaryView, setSummaryView] = useState("weekly");
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // The FileReader callback runs after an await boundary. Reading the latest
+  // data from a ref avoids merging with the snapshot captured when the file
+  // was picked.
+  const dataRef = useRef({ weights, people, currentUser });
+  useEffect(() => {
+    dataRef.current = { weights, people, currentUser };
+  }, [weights, people, currentUser]);
 
   const userWeights = useMemo(() => {
     if (!currentUser) return [];
-    return weights.filter((w) => w.personId === currentUser.id);
-  }, [currentUser, weights]);
+    return weights
+      .filter((entry) => entry.personId === currentUser.id)
+      .sort((a, b) => {
+        const left = dateKey(a.date);
+        const right = dateKey(b.date);
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+  }, [weights, currentUser]);
 
   const summary = useMemo(() => {
-    const sorted = [...userWeights].sort(
-      (a, b) => new Date(a.date) - new Date(b.date),
-    );
-    if (!sorted.length) return null;
-    const initialWeight = sorted[0].kg;
-    const currentWeight = sorted[sorted.length - 1].kg;
+    if (!userWeights.length) return null;
+    const initialWeight = userWeights[0].kg;
+    const currentWeight = userWeights[userWeights.length - 1].kg;
     const delta = currentWeight - initialWeight;
-    const firstDate = dayjs(sorted[0].date);
-    const lastDate = dayjs(sorted[sorted.length - 1].date);
-    const daysTracked = lastDate.diff(firstDate, "day") + 1;
-    const weeklyDelta = daysTracked > 0 ? (delta / daysTracked) * 7 : 0;
-    const activityCount = sorted.reduce((memo, entry) => {
-      Object.entries(entry.activities || {}).forEach(([key, value]) => {
-        if (value) memo[key] = (memo[key] || 0) + 1;
-      });
-      return memo;
-    }, {});
+    const firstDate = dateKey(userWeights[0].date);
+    const lastDate = dateKey(userWeights[userWeights.length - 1].date);
+    const daysTracked = Math.max(daysBetween(firstDate, lastDate) + 1, 1);
+    const weeklyDelta = (delta / daysTracked) * 7;
+    const activityCount = {};
+    for (const entry of userWeights) {
+      for (const [key, value] of Object.entries(entry.activities || {})) {
+        if (value) activityCount[key] = (activityCount[key] || 0) + 1;
+      }
+    }
     const activitySummary = Object.entries(activityCount)
-      .map(([key, value]) => `${key}: ${value} days`)
+      .map(
+        ([key, value]) =>
+          `${getActivityByKey(key)?.label || key}: ${value} days`,
+      )
       .join(", ");
     return {
-      entryCount: sorted.length,
+      entryCount: userWeights.length,
       initialWeight: initialWeight.toFixed(1),
       currentWeight: currentWeight.toFixed(1),
       changeText: `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} kg`,
@@ -287,67 +203,83 @@ export default function InsightsPage({ currentUser }) {
     };
   }, [userWeights]);
 
-  const insights = useMemo(
-    () => generateLocalInsights(summary, userWeights),
-    [summary, userWeights],
-  );
-
+  const insights = useMemo(() => generateLocalInsights(summary), [summary]);
   const weeklySummaries = useMemo(
     () => generateWeeklySummaries(userWeights),
     [userWeights],
   );
-
   const monthlySummaries = useMemo(
     () => generateMonthlySummaries(userWeights),
     [userWeights],
   );
 
   const onFileImport = useCallback(
-    (event) => {
+    async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
+
+      setImportError("");
+      setImportSuccess("");
+      setConnectedRecords([]);
+      setImporting(true);
+
       const reader = new FileReader();
+
       reader.onload = async () => {
         try {
-          const text = reader.result;
-          const importedRaw = parseWeightData(text);
-          const imported = normalizeImportedRecords(
-            importedRaw,
-            currentUser?.id,
+          const { weights: currentWeights, people: currentPeople, currentUser: activeUser } =
+            dataRef.current;
+          const raw = parseWeightData(String(reader.result));
+          const normalized = normalizeImportedRecords(raw, activeUser?.id);
+          const validIds = new Set(currentPeople.map((person) => person.id));
+          const sanitized = sanitizePersonIds(
+            normalized,
+            validIds,
+            activeUser?.id,
           );
-          if (!imported.length) {
+
+          if (!sanitized.length) {
             setImportError("No usable records found in the file.");
-            setImportSuccess("");
-            setConnectedRecords([]);
+            toast("Nenhum registro utilizável no arquivo", "error");
             return;
           }
 
-          const nextWeights = mergeWeights(weights, imported);
-          await saveWeights(nextWeights);
-          updateWeights(nextWeights);
-
-          setImportError("");
-          setImportSuccess(
-            `Imported ${imported.length} record${imported.length === 1 ? "" : "s"} and saved to the database.`,
+          const { records, added, updated } = mergeWeights(
+            currentWeights,
+            sanitized,
           );
-          setConnectedRecords(imported);
+
+          await importWeights(records);
+
+          setImportSuccess(
+            `Imported ${added} new and updated ${updated} existing record${
+              added + updated === 1 ? "" : "s"
+            }.`,
+          );
+          setConnectedRecords(records);
+          toast(`${added + updated} registros importados`, "success");
         } catch (err) {
-          console.error("Import failed", err);
           setImportError(
             "Error parsing or saving file. Use the app export JSON format or a valid CSV.",
           );
-          setImportSuccess("");
-          setConnectedRecords([]);
+          toast(err.message || "Falha na importação", "error");
+        } finally {
+          setImporting(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
         }
       };
+
       reader.readAsText(file);
     },
-    [currentUser, updateWeights, weights],
+    [importWeights, toast],
   );
+
+  const fileStamp = todayKey();
+  const safeName = (currentUser?.name || "export").replace(/[^\w-]+/g, "_");
 
   const exportAsJSON = useCallback(() => {
     if (!userWeights.length) {
-      alert("No data to export");
+      toast("Nada para exportar", "error");
       return;
     }
     const data = {
@@ -356,63 +288,44 @@ export default function InsightsPage({ currentUser }) {
       summary,
       weights: userWeights,
     };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `weight-data-${currentUser?.name || "export"}-${dayjs().format("YYYY-MM-DD")}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [userWeights, currentUser, summary]);
+    downloadFile(
+      JSON.stringify(data, null, 2),
+      `weight-data-${safeName}-${fileStamp}.json`,
+      "application/json",
+    );
+    toast("Export JSON pronto", "success");
+  }, [userWeights, currentUser, summary, safeName, fileStamp, toast]);
 
   const exportAsCSV = useCallback(() => {
     if (!userWeights.length) {
-      alert("No data to export");
+      toast("Nada para exportar", "error");
       return;
     }
-    const headers = ["Date", "Weight (kg)", "Gym", "Bike", "Boxing", "Running"];
-    const rows = userWeights.map((w) => [
-      w.date,
-      w.kg,
-      w.activities?.gym ? "Yes" : "No",
-      w.activities?.bike ? "Yes" : "No",
-      w.activities?.boxing ? "Yes" : "No",
-      w.activities?.run ? "Yes" : "No",
-    ]);
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `weight-data-${currentUser?.name || "export"}-${dayjs().format("YYYY-MM-DD")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [userWeights, currentUser]);
+    downloadFile(
+      toCSV(userWeights),
+      `weight-data-${safeName}-${fileStamp}.csv`,
+      "text/csv;charset=utf-8",
+    );
+    toast("Export CSV pronto", "success");
+  }, [userWeights, safeName, fileStamp, toast]);
 
   const exportAsPrompt = useCallback(() => {
     if (!userWeights.length) {
-      alert("No data to export");
+      toast("Nada para exportar", "error");
       return;
     }
     const prompt = `Here is my weight tracking data for analysis:\n\n${JSON.stringify(
-      {
-        user: currentUser?.name,
-        summary,
-        data: userWeights,
-      },
+      { user: currentUser?.name, summary, data: userWeights },
       null,
       2,
     )}\n\nPlease analyze this data and provide insights.`;
-    const blob = new Blob([prompt], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `weight-prompt-${currentUser?.name || "export"}-${dayjs().format("YYYY-MM-DD")}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [userWeights, currentUser, summary]);
+    downloadFile(
+      prompt,
+      `weight-prompt-${safeName}-${fileStamp}.txt`,
+      "text/plain;charset=utf-8",
+    );
+    toast("Prompt pronto", "success");
+  }, [userWeights, currentUser, summary, safeName, fileStamp, toast]);
 
   if (loading)
     return (
@@ -455,8 +368,8 @@ export default function InsightsPage({ currentUser }) {
         <section className="insights-panel section-gap">
           <h3>Local insights</h3>
           <div className="insights-list">
-            {insights.map((insight, idx) => (
-              <div key={idx} className="insight-card">
+            {insights.map((insight) => (
+              <div key={insight} className="insight-card">
                 {insight}
               </div>
             ))}
@@ -484,36 +397,19 @@ export default function InsightsPage({ currentUser }) {
             </button>
           </div>
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "12px" }}
-          >
+          <div className="report-list">
             {summaryView === "weekly"
               ? weeklySummaries.slice(0, 12).map((week) => (
-                  <div
-                    key={week.weekStart}
-                    style={{
-                      padding: "12px",
-                      backgroundColor: "var(--bg-secondary)",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                    }}
-                  >
-                    <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                      Week of {dayjs(week.weekStart).format("MMM DD")} -{" "}
-                      {week.weekEnd}
+                  <div key={week.weekStart} className="report-card">
+                    <div className="report-card-title">
+                      Week of {week.weekLabel}
                     </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "8px",
-                      }}
-                    >
+                    <div className="report-card-grid">
                       <span>Entries: {week.entries}</span>
                       <span>Min: {week.min} kg</span>
                       <span>Max: {week.max} kg</span>
                       <span>Avg: {week.avg} kg</span>
-                      <span colSpan={2}>
+                      <span className="report-card-wide">
                         Change: {week.delta > 0 ? "+" : ""}
                         {week.delta} kg
                       </span>
@@ -521,32 +417,16 @@ export default function InsightsPage({ currentUser }) {
                   </div>
                 ))
               : monthlySummaries.slice(0, 12).map((month) => (
-                  <div
-                    key={month.monthKey}
-                    style={{
-                      padding: "12px",
-                      backgroundColor: "var(--bg-secondary)",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                    }}
-                  >
-                    <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-                      {month.month}
-                    </div>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "8px",
-                      }}
-                    >
+                  <div key={month.monthKey} className="report-card">
+                    <div className="report-card-title">{month.monthLabel}</div>
+                    <div className="report-card-grid">
                       <span>Entries: {month.entries}</span>
                       <span>First: {month.first} kg</span>
                       <span>Last: {month.last} kg</span>
                       <span>Avg: {month.avg} kg</span>
                       <span>Min: {month.min} kg</span>
                       <span>Max: {month.max} kg</span>
-                      <span colSpan={2}>
+                      <span className="report-card-wide">
                         Month change: {month.delta > 0 ? "+" : ""}
                         {month.delta} kg
                       </span>
@@ -557,9 +437,9 @@ export default function InsightsPage({ currentUser }) {
         </section>
       )}
 
-      <section className="insights-panel" style={{ marginTop: "24px" }}>
+      <section className="insights-panel section-gap">
         <h3>Export data</h3>
-        <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+        <p className="page-description" style={{ marginBottom: "16px" }}>
           Export your data for external analysis or backup.
         </p>
         <div className="export-actions">
@@ -573,13 +453,7 @@ export default function InsightsPage({ currentUser }) {
             💬 AI Prompt
           </button>
         </div>
-        <p
-          style={{
-            color: "var(--text-secondary)",
-            marginTop: "12px",
-            fontSize: "12px",
-          }}
-        >
+        <p className="page-description" style={{ marginTop: "12px", fontSize: "12px" }}>
           Use the AI Prompt format to paste your data into ChatGPT, Claude, or
           any other AI for detailed analysis.
         </p>
@@ -588,33 +462,34 @@ export default function InsightsPage({ currentUser }) {
       <section className="insights-panel section-gap">
         <h3>Import external data</h3>
         <p className="page-description" style={{ marginBottom: "12px" }}>
-          Import weight history from exported JSON or compatible CSV. Imported
-          records are saved to the database.
+          Import weight history from exported JSON or compatible CSV. Records
+          that already exist for the same person and date are updated instead
+          of duplicated.
         </p>
+        <label className="field-label" htmlFor="import-file">
+          Import file (JSON or CSV)
+        </label>
         <input
+          id="import-file"
+          ref={fileInputRef}
           className="file-input"
           type="file"
           accept=".json,.csv"
           onChange={onFileImport}
+          disabled={importing}
         />
         {importError && (
-          <div
-            className="goal-progress-text"
-            style={{ color: "var(--danger)", marginTop: "12px" }}
-          >
+          <div className="goal-progress-text import-message-error">
             {importError}
           </div>
         )}
         {importSuccess && (
-          <div
-            className="goal-progress-text"
-            style={{ color: "var(--success)", marginTop: "12px" }}
-          >
+          <div className="goal-progress-text import-message-success">
             {importSuccess}
           </div>
         )}
         {connectedRecords.length > 0 && (
-          <div className="goal-progress-text" style={{ marginTop: "12px" }}>
+          <div className="goal-progress-text">
             ✅ Connected records: {connectedRecords.length}
           </div>
         )}

@@ -1,14 +1,8 @@
-import React, {
-  useEffect,
-  useState,
-  useMemo,
-  lazy,
-  Suspense,
-  useCallback,
-} from "react";
-import { saveWeight, deleteWeight, uid } from "../utils/storage";
+import React, { useState, useMemo, lazy, Suspense, useCallback } from "react";
 import { useData } from "../contexts/DataContext";
 import WeightList from "../components/WeightList";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { dateKey, monthOf, yearOf } from "../utils/date";
 
 const WeightModal = lazy(() => import("../components/WeightModal"));
 
@@ -28,89 +22,88 @@ const monthOptions = [
   { value: "12", label: "Dec" },
 ];
 
-export default function WeightsPage({ currentUser }) {
-  const { weights, people, loading, updateWeights } = useData();
+export default function WeightsPage() {
+  const {
+    weightsByPerson,
+    people,
+    loading,
+    currentUser,
+    saveWeightEntry,
+    removeWeight,
+    toast,
+  } = useData();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selectedYear, setSelectedYear] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("all");
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  // Filter weights to show only current user's weights
   const userWeights = useMemo(() => {
     if (!currentUser) return [];
-    return weights.filter((w) => w.personId === currentUser.id);
-  }, [weights, currentUser]);
+    return weightsByPerson.get(currentUser.id) || [];
+  }, [weightsByPerson, currentUser]);
 
   const yearOptions = useMemo(() => {
-    const years = [
-      ...new Set(userWeights.map((w) => new Date(w.date).getFullYear())),
-    ];
-    return years
-      .sort((a, b) => b - a)
-      .map((year) => ({
-        value: String(year),
-        label: String(year),
-      }));
+    const years = [...new Set(userWeights.map((w) => yearOf(w.date)))];
+    return years.sort((a, b) => b - a);
   }, [userWeights]);
 
   React.useEffect(() => {
-    if (yearOptions.length && !selectedYear) {
-      setSelectedYear(yearOptions[0].value);
+    if (!yearOptions.length) {
+      if (selectedYear && selectedYear !== "all") setSelectedYear("all");
+      return;
     }
+    const valid =
+      selectedYear === "all" ||
+      yearOptions.some((year) => String(year) === selectedYear);
+    if (!valid) setSelectedYear(String(yearOptions[0]));
   }, [yearOptions, selectedYear]);
 
   const filteredWeights = useMemo(() => {
     let next = userWeights;
-    if (selectedYear) {
-      next = next.filter(
-        (w) => new Date(w.date).getFullYear().toString() === selectedYear,
-      );
+    if (selectedYear && selectedYear !== "all") {
+      next = next.filter((w) => String(yearOf(w.date)) === selectedYear);
     }
     if (selectedMonth !== "all") {
       next = next.filter(
-        (w) =>
-          String(new Date(w.date).getMonth() + 1).padStart(2, "0") ===
-          selectedMonth,
+        (w) => String(monthOf(w.date)).padStart(2, "0") === selectedMonth,
       );
     }
     return next;
   }, [userWeights, selectedYear, selectedMonth]);
 
   const addOrUpdate = useCallback(
-    async (w) => {
-      const previous = weights;
-      const nextWeight = {
-        ...w,
-        id: w.id || uid(),
-      };
-      const next = w.id
-        ? weights.map((x) => (x.id === w.id ? nextWeight : x))
-        : [...weights, nextWeight];
-      updateWeights(next);
+    async (entry) => {
+      setSaving(true);
       try {
-        await saveWeight(nextWeight);
+        await saveWeightEntry(entry);
+        toast(
+          entry.id ? "Registro atualizado" : "Registro salvo",
+          "success",
+        );
+        setOpen(false);
+        setEditing(null);
       } catch (err) {
-        console.error("Error saving weights", err);
-        updateWeights(previous);
+        toast(err.message || "Não foi possível salvar", "error");
+      } finally {
+        setSaving(false);
       }
     },
-    [weights, updateWeights],
+    [saveWeightEntry, toast],
   );
 
-  const del = useCallback(
-    async (id) => {
-      const previous = weights;
-      const next = weights.filter((w) => w.id !== id);
-      updateWeights(next);
-      try {
-        await deleteWeight(id);
-      } catch (err) {
-        console.error("Error deleting weight", err);
-        updateWeights(previous);
-      }
-    },
-    [weights, updateWeights],
-  );
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
+    setPendingDelete(null);
+    try {
+      await removeWeight(id);
+      toast("Registro excluído", "success");
+    } catch (err) {
+      toast(err.message || "Não foi possível excluir", "error");
+    }
+  }, [pendingDelete, removeWeight, toast]);
 
   if (loading)
     return (
@@ -141,9 +134,10 @@ export default function WeightsPage({ currentUser }) {
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(e.target.value)}
                 >
+                  <option value="all">All years</option>
                   {yearOptions.map((year) => (
-                    <option key={year.value} value={year.value}>
-                      {year.label}
+                    <option key={year} value={String(year)}>
+                      {year}
                     </option>
                   ))}
                 </select>
@@ -164,13 +158,7 @@ export default function WeightsPage({ currentUser }) {
               </div>
             </div>
             {filteredWeights.length === 0 ? (
-              <div
-                style={{
-                  padding: "32px 16px",
-                  textAlign: "center",
-                  color: "var(--text-secondary)",
-                }}
-              >
+              <div className="empty-state-card">
                 <p style={{ fontSize: "16px", margin: "0 0 8px 0" }}>
                   No weight entries found for this period
                 </p>
@@ -186,21 +174,13 @@ export default function WeightsPage({ currentUser }) {
                   setEditing(w);
                   setOpen(true);
                 }}
-                onDelete={del}
+                onDelete={(w) => setPendingDelete(w)}
               />
             )}
           </>
         ) : (
-          <div
-            style={{
-              padding: "32px 16px",
-              textAlign: "center",
-              color: "var(--text-secondary)",
-            }}
-          >
-            <p>
-              👤 Please select a user from the top right to view their weights
-            </p>
+          <div className="empty-state-card">
+            <p>👤 Please select a user from the top right to view their weights</p>
           </div>
         )}
       </div>
@@ -208,11 +188,13 @@ export default function WeightsPage({ currentUser }) {
       {currentUser && (
         <button
           className="add-weight-fab"
+          type="button"
           onClick={() => {
             setEditing(null);
             setOpen(true);
           }}
           title="Add new weight entry"
+          aria-label="Adicionar registro de peso"
         >
           ➕
         </button>
@@ -227,15 +209,34 @@ export default function WeightsPage({ currentUser }) {
           }
         >
           <WeightModal
+            key={editing?.id || "new"}
             open={open}
-            onClose={() => setOpen(false)}
+            onClose={() => {
+              setOpen(false);
+              setEditing(null);
+            }}
             onSave={addOrUpdate}
             initial={editing}
             people={people}
             currentUser={currentUser}
+            saving={saving}
           />
         </Suspense>
       )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Excluir registro?"
+        message={
+          pendingDelete
+            ? `Apagar o registro de ${dateKey(pendingDelete.date)} (${pendingDelete.kg} kg)? Essa ação não pode ser desfeita.`
+            : ""
+        }
+        confirmLabel="Excluir"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

@@ -14,6 +14,14 @@
   --bg-secondary: #2b2b2b;
   --text: #f4f4f4;
 
+  /* Safe areas for notched devices (iPhone home indicator, etc.) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --nav-height: 56px;
+  --header-height: 56px;
+
   /* Activity colors */
   --gym-color: #fbc02d;
   --gym-light: #3f3f00;
@@ -34,6 +42,9 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  /* Stops iOS from inflating the font size when the device is rotated. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -48,6 +59,7 @@ body {
 
 #root {
   height: 100vh;
+  height: 100dvh;
 }
 
 /* App Container */
@@ -55,6 +67,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   max-width: 100%;
   overflow: hidden;
 }
@@ -66,8 +79,9 @@ body {
   justify-content: space-between;
   background: var(--bg-white);
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 16px;
-  height: 56px;
+  padding: calc(12px + var(--safe-top)) calc(16px + var(--safe-right)) 12px
+    calc(16px + var(--safe-left));
+  height: calc(var(--header-height) + var(--safe-top));
   position: relative;
   z-index: 100;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -120,7 +134,7 @@ body {
 /* Mobile Menu */
 .mobile-menu {
   position: fixed;
-  top: 56px;
+  top: calc(var(--header-height) + var(--safe-top));
   left: 0;
   right: 0;
   background: var(--bg-white);
@@ -130,6 +144,8 @@ body {
   flex-direction: column;
   animation: slideDown 0.3s ease-out;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-height: calc(100dvh - var(--header-height) - var(--safe-top));
+  overflow-y: auto;
 }
 
 @keyframes slideDown {
@@ -173,10 +189,12 @@ body {
 /* Main Content */
 .app-main {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 96px;
+  padding-bottom: calc(96px + var(--safe-bottom));
   position: relative;
+  overscroll-behavior-y: contain;
 }
 
 main {
@@ -192,7 +210,8 @@ main {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 56px;
+  height: calc(var(--nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--bg-white);
   border-top: 1px solid var(--border-color);
   display: flex;
@@ -252,6 +271,9 @@ main {
   justify-content: center;
   z-index: 200;
   animation: fadeIn 0.2s ease-out;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--safe-top);
 }
 
 @keyframes fadeIn {
@@ -265,12 +287,14 @@ main {
 
 .modal-content {
   background: var(--bg-white);
-  padding: 24px;
+  padding: 24px 24px calc(24px + var(--safe-bottom));
   border-radius: 16px 16px 0 0;
   width: 100%;
   max-width: 100%;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   animation: slideUp 0.3s ease-out;
 }
 
@@ -423,6 +447,8 @@ main {
 button {
   font-family: inherit;
   tap-highlight-color: transparent;
+  /* Removes the 300ms double-tap delay without blocking pinch zoom. */
+  touch-action: manipulation;
 }
 
 .primary {
@@ -468,7 +494,9 @@ select {
   border-radius: 10px;
   background: var(--bg-white);
   color: var(--text-primary);
-  font-size: 14px;
+  /* 16px is the threshold below which iOS Safari zooms the whole page when
+     the field is focused. */
+  font-size: 16px;
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
@@ -508,6 +536,12 @@ label {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger-color, #f44336);
+  font-size: 13px;
 }
 
 .card {
@@ -720,6 +754,7 @@ label {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .weights-filter {
@@ -739,16 +774,19 @@ label {
 
 .weights-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
   padding: 0 16px 24px;
+  display: flex;
+  flex-direction: column;
 }
 
 .add-weight-fab {
   position: fixed;
-  bottom: 72px;
-  right: 16px;
+  bottom: calc(72px + var(--safe-bottom));
+  right: calc(16px + var(--safe-right));
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -772,9 +810,26 @@ label {
 }
 
 /* Weight List */
+.weight-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
 .weight-list {
+  position: relative;
   margin: 0;
-  padding: 12px;
+  padding: 0;
+}
+
+.weight-list-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -893,15 +948,15 @@ label {
 }
 
 .w-menu button {
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 8px;
+  font-size: 13px;
   background: transparent;
   border: none;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   transition: all 0.2s;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 36px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1288,8 +1343,8 @@ label {
 
 /* User Selector */
 .user-selector {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s;
@@ -1302,6 +1357,8 @@ label {
   font-weight: 700;
   background-size: cover;
   background-position: center;
+  padding: 0;
+  overflow: hidden;
 }
 
 .user-selector.selected:not(.avatar) {
@@ -1644,3 +1701,391 @@ p {
     border-right: 1px solid var(--border-color);
   }
 }
+
+/* ========================================
+   Calendar page
+   ======================================== */
+
+.calendar-page {
+  padding: 16px;
+}
+
+.calendar-page h2 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+}
+
+.calendar-subtitle {
+  color: var(--text-secondary);
+  margin: 0 0 20px 0;
+  font-size: 14px;
+}
+
+.calendar-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.calendar-header h3 {
+  margin: 0;
+  font-size: 16px;
+  text-align: center;
+}
+
+.calendar-nav-btn {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-white);
+  color: var(--text-primary);
+  font-size: 13px;
+  min-height: 36px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 0;
+  color: var(--text-secondary);
+}
+
+.calendar-empty {
+  padding: 8px 0;
+}
+
+.calendar-day {
+  padding: 8px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 400;
+  font-size: 14px;
+  min-height: 36px;
+}
+
+.calendar-day.logged {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.calendar-day.selected {
+  border: 2px solid var(--accent);
+  font-weight: 700;
+}
+
+.calendar-day.today {
+  box-shadow: inset 0 0 0 2px var(--warning);
+}
+
+.calendar-logged-note {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: var(--bg-white);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.calendar-field {
+  margin-bottom: 12px;
+}
+
+.calendar-field label,
+.calendar-field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.calendar-field input[type="number"] {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-white);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.calendar-activities {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.calendar-activities label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.calendar-submit {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* ========================================
+   Feedback: toasts, confirm dialog, errors
+   ======================================== */
+
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 16px);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text);
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: toastIn 0.22s ease-out;
+}
+
+.toast-success {
+  border-color: var(--success);
+  background: #1b3a26;
+}
+
+.toast-error {
+  border-color: var(--danger);
+  background: #3d1f1f;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+}
+
+@keyframes toastIn {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.confirm-dialog {
+  max-width: 420px;
+}
+
+.confirm-message {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.danger {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.danger:hover {
+  background: #c5372a;
+}
+
+.error-boundary {
+  padding: 32px 20px;
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.error-boundary h2 {
+  margin-bottom: 12px;
+}
+
+.error-boundary-detail {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--bg-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.data-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--danger);
+  background: #3d1f1f;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.data-error-text {
+  flex: 1 1 200px;
+  word-break: break-word;
+}
+
+.data-error-retry {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+/* ========================================
+   Small shared widgets
+   ======================================== */
+
+.chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-soft);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 36px;
+  transition: all 0.15s;
+  tap-highlight-color: transparent;
+}
+
+.chip:active {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.date-range-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-card {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.report-card-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.report-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.report-card-wide {
+  grid-column: 1 / -1;
+}
+
+.import-message-error {
+  color: var(--danger);
+}
+
+.import-message-success {
+  color: var(--success);
+}
+
+.avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.user-selector .person-avatar {
+  width: 100%;
+  height: 100%;
+}
+
+.person-avatar-button.active {
+  background: var(--accent-light);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
